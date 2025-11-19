@@ -68,16 +68,19 @@ class Rule:
             Rule: 规则对象
         """
         rule_type = rule_dict.pop("type", None)
+        is_trainable = rule_dict.pop("is_trainable", True)
         if rule_type == "ComparisonRule":
-            return ComparisonRule(**rule_dict)
+            rule = ComparisonRule(**rule_dict)
         elif rule_type == "ThresholdRule":
-            return ThresholdRule(**rule_dict)
+            rule = ThresholdRule(**rule_dict)
         elif rule_type == "RangeRule":
-            return RangeRule(**rule_dict)
+            rule = RangeRule(**rule_dict)
         elif rule_type == "CategoricalRule":
-            return CategoricalRule(**rule_dict)
+            rule = CategoricalRule(**rule_dict)
         else:
             raise ValueError(f"未知规则类型: {rule_type}")
+        rule.is_trainable = is_trainable
+        return rule
 
 
 class ComparisonRule(Rule):

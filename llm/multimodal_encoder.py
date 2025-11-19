@@ -10,6 +10,7 @@ import requests
 from io import BytesIO
 from datetime import datetime
 from config.path_config import MAP_PATH
+from config.baidu_config import baidu_api_key
 
 class VisualEncoder:
     """
@@ -164,7 +165,7 @@ class SpatialEncoder:
     """
     def __init__(self):
         """初始化空间编码器"""
-        self.api_key = "EbkD3DWCB5Ev9HfZkMwTJymCxxgc28nr"  # 百度地图API密钥
+        self.api_key = baidu_api_key  # 百度地图API密钥
     
     def geocode(self, address, city):
         """
@@ -248,8 +249,8 @@ class SpatialEncoder:
                         poi_results[category].extend([
                             {
                                 "name": poi["name"],
-                                "distance": poi["detail_info"]["distance"] if "detail_info" in poi else None,
-                                "address": poi["address"]
+                                "distance": poi["detail_info"]["distance"] if "detail_info" in poi and "distance" in poi["detail_info"] else None,
+                                "address": poi.get("address", "")
                             }
                             for poi in result["results"][:5]  # 每类最多取5个
                         ])

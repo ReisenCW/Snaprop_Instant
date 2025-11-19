@@ -114,7 +114,7 @@ def api_valuation():
         estimation_result = valuation_system.estimate_property_value(target_property)
         
         # 生成报告
-        report_path = valuation_system.generate_report(property_data, estimation_result)
+        report_path = valuation_system.generate_report(property_data, estimation_result, target_property)
         
         # 构建响应
         response = {
@@ -173,11 +173,16 @@ def reports():
     
     return render_template('reports.html', reports=reports_list)
 
-@app.route('/report/<filename>')
+@app.route('/report/<path:filename>')
 def view_report(filename):
     """查看报告页面"""
     reports_dir = os.path.join("static", "reports")
-    file_path = os.path.join(reports_dir, filename)
+    
+    # 处理不同的路径格式
+    if filename.startswith("static/reports/"):
+        file_path = filename
+    else:
+        file_path = os.path.join(reports_dir, filename)
     
     try:
         with open(file_path, 'r', encoding='utf-8') as f:

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>估值报告列表 - 房估宝</title>
+</head>
+<body>
+    {% extends "base.html" %}
+
+    {% block title %}估值报告列表 - 房估宝{% endblock %}
+
+    {% block content %}
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+            <h1 class="mb-4">估值报告列表</h1>
+            
+            {% if reports %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>房产地址</th>
+                            <th>估价单价 (元/㎡)</th>
+                            <th>生成时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in reports %}
+                        <tr>
+                            <td>{{ report.address }}</td>
+                            <td>{{ "%.2f"|format(report.estimated_price) }}</td>
+                            <td>{{ report.generated_at }}</td>
+                            <td>
+                                <a href="/report/{{ report.filename }}" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-eye"></i> 查看详情
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <h5>暂无估值报告</h5>
+                <p>请先进行房产估值，生成报告后即可在此查看。</p>
+                <a href="/valuation" class="btn btn-primary">开始估值</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endblock %}
+</body>
+</html>
