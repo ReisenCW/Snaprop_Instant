@@ -20,9 +20,9 @@
 import asyncio
 from typing import Optional, Tuple
 
-from config import Config
-from agent import HousePriceAgent
-from evaluator import Evaluator
+from config.predict_config import Config
+from llm_prediction.agent import HousePriceAgent
+from llm_prediction.evaluator import Evaluator
 
 
 async def predict_region_async(region: str,
@@ -67,7 +67,7 @@ async def predict_region_async(region: str,
 
         if not config.ENABLE_EVOLUTION:
             # 未启用进化：保存结果并返回
-            agent.save_answer(f"{region} {time_range}", pred, "未获取实际趋势", -1)
+            # agent.save_answer(f"{region} {time_range}", pred, "未获取实际趋势", -1)
             break
 
         # 获取实际趋势并计算评分
@@ -81,13 +81,13 @@ async def predict_region_async(region: str,
         _ = await agent.generate_reflection(f"{region} {time_range}", pred, actual, score, info)
 
         if score >= config.SCORE_THRESHOLD:
-            agent.save_answer(f"{region} {time_range}", pred, actual, score)
+            # agent.save_answer(f"{region} {time_range}", pred, actual, score)
             break
 
         retries += 1
         if retries > max_retries:
             # 达到最大重试次数，放弃并保存当前最佳结果
-            agent.save_answer(f"{region} {time_range}", pred, actual, score)
+            # agent.save_answer(f"{region} {time_range}", pred, actual, score)
             break
 
         if debug:
@@ -101,7 +101,7 @@ async def predict_region_async(region: str,
         # 预测后续时间段时，利用反思/持久记忆进行辅助
         info2 = await agent.search_related_info(region, follow_up_time_range)
         follow_up_prediction = await agent.predict_trend(region, follow_up_time_range, info2)
-        agent.save_answer(f"{region} {follow_up_time_range}", follow_up_prediction, "未获取实际趋势", -1)
+        # agent.save_answer(f"{region} {follow_up_time_range}", follow_up_prediction, "未获取实际趋势", -1)
         if debug:
             print(f"[api] Follow-up prediction for {region} {follow_up_time_range}: {follow_up_prediction}")
 

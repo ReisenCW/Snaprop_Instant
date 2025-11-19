@@ -1,10 +1,10 @@
 import os
-from dashscope import Generation
-from config import Config
-import json
-from prompts import PROMPTS
-from datetime import datetime
 import re
+import json
+from dashscope import Generation
+from datetime import datetime
+from config.predict_config import Config
+from llm_prediction.prompts import PROMPTS
 
 class HousePriceAgent:
     def __init__(self, config: Config):

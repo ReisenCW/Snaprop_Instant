@@ -1,8 +1,8 @@
-from dashscope import Generation
-from prompts import PROMPTS
-from config import Config
 import json
 import re
+from dashscope import Generation
+from llm_prediction.prompts import PROMPTS
+from config.predict_config import Config
 
 class Evaluator:
     # 修复提示词中的JSON示例转义问题

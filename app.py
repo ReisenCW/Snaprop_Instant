@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from main import PropertyValuationSystem
+    from llm_prediction.api import predict_region
 except ImportError as e:
     print(f"导入模块失败: {str(e)}")
     print("请确保已安装所有依赖项，并且所有模块都存在")
@@ -113,8 +114,33 @@ def api_valuation():
         # 估算房产价值
         estimation_result = valuation_system.estimate_property_value(target_property)
         
+        # 房价趋势预测
+        price_prediction = None
+        try:
+            # 从地址中提取区域信息
+            address = data.get('address', '')
+            city = data.get('city', '上海')
+            region = city + address
+            currentTime = datetime.now()
+            # 6个月之前
+            beforeTime = currentTime.replace(month=currentTime.month - 6 if currentTime.month > 6 else currentTime.month + 6, year=currentTime.year -1 if currentTime.month <=6 else currentTime.year)
+            # 6个月之后
+            afterTime = currentTime.replace(month=currentTime.month + 6 if currentTime.month <=6 else currentTime.month -6, year=currentTime.year +1 if currentTime.month >6 else currentTime.year)
+
+            time_range = f"{beforeTime.strftime('%Y年%m月')}-{currentTime.strftime('%Y年%m月')}"
+            currentTimeRange = f"{currentTime.strftime('%Y年%m月')}-{afterTime.strftime('%Y年%m月')}"
+            _, follow_up_pred = predict_region(region, time_range, currentTimeRange)
+            price_prediction = {
+                "region": region,
+                "time_range": currentTimeRange,
+                "prediction": follow_up_pred
+            }
+        except Exception as e:
+            print(f"房价预测失败: {str(e)}")
+            price_prediction = None
+
         # 生成报告
-        report_path = valuation_system.generate_report(property_data, estimation_result, target_property)
+        report_path = valuation_system.generate_report(property_data, estimation_result, target_property, price_prediction)
         
         # 构建响应
         response = {
@@ -123,7 +149,8 @@ def api_valuation():
             'confidence': estimation_result['confidence'],
             'total_price': estimation_result['estimated_price'] * float(data.get('area', 90)),
             'explanation': estimation_result['explanation'],
-            'report_path': report_path
+            'report_path': report_path,
+            'price_prediction': price_prediction
         }
         
         return jsonify(response)

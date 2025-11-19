@@ -145,6 +145,24 @@
                     <p id="explanation" class="mb-0" style="white-space: pre-line;">-</p>
                 </div>
                 
+                <h5>房价趋势预测</h5>
+                <div id="predictionSection" class="bg-light p-3 rounded mb-3" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>预测区域：</strong><span id="predictionRegion">-</span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>时间范围：</strong><span id="predictionTimeRange">-</span></p>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <p id="predictionResult" class="mb-0" style="white-space: pre-line;">-</p>
+                    </div>
+                </div>
+                <div id="noPredictionMsg" class="text-muted mb-3" style="display: none;">
+                    <small>暂无房价趋势预测数据</small>
+                </div>
+                
                 <div class="d-grid gap-2">
                     <a id="reportLink" href="#" class="btn btn-outline-primary" target="_blank">查看完整报告</a>
                     <button type="button" id="newValuationBtn" class="btn btn-secondary">新的估值</button>
@@ -237,6 +255,18 @@
                     document.getElementById('confidenceBar').style.width = confidence + '%';
                     
                     document.getElementById('explanation').textContent = response.data.explanation;
+
+                    // 处理房价趋势预测
+                    if (response.data.price_prediction) {
+                        document.getElementById('predictionSection').style.display = 'block';
+                        document.getElementById('noPredictionMsg').style.display = 'none';
+                        document.getElementById('predictionRegion').textContent = response.data.price_prediction.region;
+                        document.getElementById('predictionTimeRange').textContent = response.data.price_prediction.time_range;
+                        document.getElementById('predictionResult').textContent = response.data.price_prediction.prediction;
+                    } else {
+                        document.getElementById('predictionSection').style.display = 'none';
+                        document.getElementById('noPredictionMsg').style.display = 'block';
+                    }
                     
                     // 设置报告链接
                     if (response.data.report_path) {
@@ -290,6 +320,8 @@
         // 新估值按钮点击事件
         document.getElementById('newValuationBtn').addEventListener('click', function() {
             document.getElementById('resultCard').style.display = 'none';
+            document.getElementById('predictionSection').style.display = 'none';
+            document.getElementById('noPredictionMsg').style.display = 'none';
             window.scrollTo(0, 0);
         });
     });
