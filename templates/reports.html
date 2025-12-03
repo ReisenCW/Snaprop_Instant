@@ -30,7 +30,13 @@
                         {% for report in reports %}
                         <tr>
                             <td>{{ report.address }}</td>
-                            <td>{{ "%.2f"|format(report.estimated_price) }}</td>
+                            <td>
+                                {% if report.price_range %}
+                                    {{ "%.2f"|format(report.price_range[0]) }} - {{ "%.2f"|format(report.price_range[1]) }}
+                                {% else %}
+                                    {{ "%.2f"|format(report.estimated_price) }}
+                                {% endif %}
+                            </td>
                             <td>{{ report.generated_at }}</td>
                             <td>
                                 <a href="/report/{{ report.filename }}" class="btn btn-primary btn-sm">

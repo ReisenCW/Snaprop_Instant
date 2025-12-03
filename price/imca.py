@@ -114,11 +114,28 @@ class IMCA:
         time_similarity = np.exp(-self.similarity_params['time_decay_rate'] * time_diff)
         similarities['time'] = time_similarity
         
-        # 2. 位置相似度（基于经纬度或地址）
-        # 实际项目中应使用地理编码API计算真实距离
-        location_similarity = 1.0  # 默认最高
-        if 'distance' in case:  # 如果已经预先计算了距离
-            location_similarity = np.exp(-self.similarity_params['distance_decay_rate'] * case['distance'])
+        # 2. 位置相似度（基于地址字符串相似度）
+        location_similarity = 0.5  # 默认中等相似度
+        if 'address' in target and 'address' in case:
+            target_addr = target['address'].lower().replace(' ', '')
+            case_addr = case['address'].lower().replace(' ', '')
+            if target_addr == case_addr:
+                location_similarity = 1.0
+            elif target_addr in case_addr or case_addr in target_addr:
+                location_similarity = 0.9
+            else:
+                # 检查共同关键词
+                target_words = set(target_addr.split('(')[0].split())  # 去掉括号部分
+                case_words = set(case_addr.split('(')[0].split())
+                common_words = target_words & case_words
+                if common_words:
+                    location_similarity = 0.7 + 0.2 * (len(common_words) / max(len(target_words), len(case_words)))
+        
+        # 如果有距离信息，使用距离计算
+        if 'distance' in case:
+            distance_similarity = np.exp(-self.similarity_params['distance_decay_rate'] * case['distance'])
+            location_similarity = max(location_similarity, distance_similarity)
+        
         similarities['location'] = location_similarity
         
         # 3. 物理特性相似度
@@ -129,20 +146,36 @@ class IMCA:
             area_similarity = np.exp(-area_diff / self.similarity_params['area_tolerance'])
         
         # 3.2 楼层相似度
-        floor_similarity = 1.0
+        floor_similarity = 0.5  # 默认
         if 'floor' in target and 'floor' in case:
-            if target['floor'] == case['floor']:
-                floor_similarity = 1.0
-            else:
-                floor_similarity = 0.5
+            # 清理楼层字符串，只保留关键字
+            def clean_floor(floor_str):
+                if isinstance(floor_str, str):
+                    if '低' in floor_str:
+                        return '低楼层'
+                    elif '中' in floor_str:
+                        return '中楼层'
+                    elif '高' in floor_str:
+                        return '高楼层'
+                return floor_str
+            
+            target_floor_clean = clean_floor(target['floor'])
+            case_floor_clean = clean_floor(case['floor'])
+            
+            floor_map = {'低楼层': 1, '中楼层': 2, '高楼层': 3}
+            target_floor = floor_map.get(target_floor_clean, 2)
+            case_floor = floor_map.get(case_floor_clean, 2)
+            diff = abs(target_floor - case_floor)
+            floor_similarity = max(0.3, 1.0 - diff * 0.3)  # 相同1.0, 相邻0.7, 相差大0.3
         
         # 3.3 装修相似度
-        decoration_similarity = 1.0
+        decoration_similarity = 0.5  # 默认
         if 'fitment' in target and 'fitment' in case:
-            if target['fitment'] == case['fitment']:
-                decoration_similarity = 1.0
-            else:
-                decoration_similarity = 0.5
+            fitment_map = {'毛坯': 1, '简装': 2, '精装': 3}
+            target_fitment = fitment_map.get(target['fitment'], 2)
+            case_fitment = fitment_map.get(case['fitment'], 2)
+            diff = abs(target_fitment - case_fitment)
+            decoration_similarity = max(0.3, 1.0 - diff * 0.3)
         
         # 3.4 房龄相似度
         age_similarity = 1.0
@@ -202,19 +235,53 @@ class IMCA:
         
         # 如果有规则框架，使用规则框架计算修正系数
         if self.rule_framework:
-            # 准备数据
-            data = {**target, **{f"comp_{k}": v for k, v in case.items()}}
+            # 映射键名以匹配规则定义
+            def map_keys(data_dict):
+                mapped = data_dict.copy()
+                if 'size' in data_dict: mapped['house_area'] = data_dict['size']
+                if 'floor' in data_dict: mapped['house_floor'] = data_dict['floor']
+                if 'fitment' in data_dict: mapped['house_decorating'] = data_dict['fitment']
+                if 'age' in data_dict: mapped['house_age'] = data_dict['age']
+                # green_rate 已经匹配
+                return mapped
+
+            # 准备目标房产数据和可比案例数据
+            target_mapped = map_keys(target)
+            case_mapped = map_keys(case)
             
-            # 应用规则
-            rule_results = self.rule_framework.apply_rule_sets(data)
+            # 分别计算目标房产和可比案例的得分
+            target_results = self.rule_framework.apply_rule_sets(target_mapped)
+            case_results = self.rule_framework.apply_rule_sets(case_mapped)
             
             # 提取修正系数
-            for rule_set_name, rule_set_result in rule_results.items():
-                for rule_name, rule_result in rule_set_result["rule_results"].items():
-                    adjustments[f"{rule_set_name}_{rule_name}"] = rule_result
+            # 这里我们假设只有一个规则集，或者我们只关心加权平均值
+            # 如果有多个规则集，逻辑可能需要调整
             
-            # 综合修正系数
-            total_adjustment = rule_set_result["weighted_average"]
+            target_score = 0
+            case_score = 0
+            
+            # 遍历所有规则集结果
+            for rule_set_name, rule_set_result in target_results.items():
+                if rule_set_name in case_results:
+                    target_val = rule_set_result["weighted_average"]
+                    case_val = case_results[rule_set_name]["weighted_average"]
+                    
+                    # 记录详细结果用于调试
+                    for rule_name, rule_result in rule_set_result["rule_results"].items():
+                        adjustments[f"{rule_set_name}_{rule_name}_target"] = rule_result
+                    
+                    # 使用第一个规则集的结果作为主要得分（简化处理）
+                    if target_score == 0:
+                        target_score = target_val
+                        case_score = case_val
+            
+            # 计算综合修正系数：目标得分 / 案例得分
+            # 添加平滑项防止除零和极端值
+            epsilon = 1e-6
+            total_adjustment = (target_score + epsilon) / (case_score + epsilon)
+            
+            # 限制修正系数范围，防止过度修正
+            total_adjustment = max(0.5, min(1.5, total_adjustment))
             
         else:
             # 如果没有规则框架，使用简单的修正方法
@@ -222,16 +289,16 @@ class IMCA:
             # 1. 时间修正
             time_adjustment = 1.0
             if 'time_diff' in case:
-                # 假设每年房价上涨5%
-                time_adjustment = 1.0 + 0.05 * case['time_diff']
+                # 假设每年房价上涨8%
+                time_adjustment = 1.0 + 0.08 * case['time_diff']
             adjustments['time'] = time_adjustment
             
             # 2. 面积修正
             area_adjustment = 1.0
             if 'size' in target and 'size' in case:
-                # 面积越大，单价越低，假设每增加10平方米，单价下降1%
+                # 面积越大，单价越低，假设每增加10平方米，单价下降2%
                 area_diff = target['size'] - case['size']
-                area_adjustment = 1.0 - 0.01 * (area_diff / 10)
+                area_adjustment = 1.0 - 0.02 * (area_diff / 10)
             adjustments['area'] = area_adjustment
             
             # 3. 楼层修正
@@ -247,8 +314,8 @@ class IMCA:
                     case_floor = case['floor']
                 
                 floor_diff = target_floor - case_floor
-                # 每层差异修正1%
-                floor_adjustment = 1.0 + 0.01 * floor_diff
+                # 每层差异修正2%
+                floor_adjustment = 1.0 + 0.02 * floor_diff
             adjustments['floor'] = floor_adjustment
             
             # 4. 装修修正
@@ -264,8 +331,8 @@ class IMCA:
                     case_fitment = case['fitment']
                 
                 fitment_diff = target_fitment - case_fitment
-                # 每级装修差异修正5%
-                decoration_adjustment = 1.0 + 0.05 * fitment_diff
+                # 每级装修差异修正10%
+                decoration_adjustment = 1.0 + 0.1 * fitment_diff
             adjustments['decoration'] = decoration_adjustment
             
             # 5. 房龄修正
@@ -273,8 +340,8 @@ class IMCA:
             if 'age' in target and 'age' in case:
                 # 房龄差异修正
                 age_diff = target['age'] - case['age']
-                # 每年房龄差异修正0.5%
-                age_adjustment = 1.0 - 0.005 * age_diff
+                # 每年房龄差异修正1%
+                age_adjustment = 1.0 - 0.01 * age_diff
             adjustments['age'] = age_adjustment
             
             # 6. 绿化率修正
@@ -282,8 +349,8 @@ class IMCA:
             if 'green_rate' in target and 'green_rate' in case:
                 # 绿化率差异修正
                 green_rate_diff = target['green_rate'] - case['green_rate']
-                # 每10%绿化率差异修正2%
-                green_rate_adjustment = 1.0 + 0.2 * green_rate_diff
+                # 每10%绿化率差异修正4%
+                green_rate_adjustment = 1.0 + 0.4 * green_rate_diff
             adjustments['green_rate'] = green_rate_adjustment
             
             # 计算总修正系数
@@ -359,9 +426,9 @@ class IMCA:
         estimated_price = np.sum(np.array(adjusted_prices) * weights[:len(adjusted_prices)])
         
         # 计算置信度
-        # 使用权重分布熵作为置信度指标
-        weights_entropy = -np.sum(weights * np.log(weights + 1e-10)) / np.log(len(weights))
-        confidence = 1 - weights_entropy  # 熵越低，置信度越高
+        # 使用平均相似度作为置信度指标
+        total_similarities = [s['total_similarity'] for s in similarities]
+        confidence = np.mean(total_similarities)
         
         # 构建结果
         result = {
@@ -405,10 +472,19 @@ class IMCA:
         for i, case in enumerate(comparable_cases):
             price = case.get('price', 'N/A')
             address = case.get('address', '未知地址')
+            size = case.get('size', 'N/A')
+            floor = case.get('floor', 'N/A')
+            fitment = case.get('fitment', 'N/A')
+            built_year = case.get('built_time', 'N/A')
+            if built_year != 'N/A' and built_year != "2015-01-01":
+                try:
+                    built_year = built_year.split('-')[0]  # 提取年份
+                except:
+                    built_year = 'N/A'
             similarity = details['similarities'][i]['total_similarity']
             weight = details['weights'][i]
             
-            explanation += f"案例 {i+1}：单价 {price} 元/平方米，位于 {address}，相似度 {similarity:.2%}，权重 {weight:.2%}\n"
+            explanation += f"案例 {i+1}：单价 {price} 元/平方米，面积 {size} 平方米，楼层 {floor}，装修 {fitment}，建成年份 {built_year}，位于 {address}，相似度 {similarity:.2%}，权重 {weight:.2%}\n"
         
         # 添加主要影响因素
         explanation += "\n主要影响因素：\n"

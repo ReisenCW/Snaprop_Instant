@@ -252,4 +252,4 @@ def main():
     print(f"\n报告已保存至: {report_path}")
 
 if __name__ == "__main__":
-    main() 
+    main()

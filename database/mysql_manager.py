@@ -88,6 +88,50 @@ class MySQLManager():
         except mysql.connector.Error as err:
             print(f"Error: {err}")
 
+    def get_comparable_cases(self, city, limit=10):
+        """
+        获取可比案例数据
+        
+        Args:
+            city: 城市名
+            limit: 返回记录数量限制
+            
+        Returns:
+            list: 可比案例列表
+        """
+        try:
+            table_name = self.get_table(city)
+            query = f"""
+            SELECT u_price, house_area, house_floor, house_decoration, house_year, 
+                   transaction_time, green_rate, house_loc
+            FROM {table_name} 
+            WHERE u_price IS NOT NULL AND house_area IS NOT NULL
+            ORDER BY transaction_time DESC 
+            LIMIT %s
+            """
+            self._cursor.execute(query, (limit,))
+            results = self._cursor.fetchall()
+            
+            comparable_cases = []
+            for row in results:
+                case = {
+                    'price': float(row[0]),  # u_price
+                    'size': float(row[1]),   # house_area
+                    'floor': row[2] if row[2] else '中楼层',  # house_floor
+                    'fitment': row[3] if row[3] else '简装',   # house_decoration
+                    'built_time': f"{row[4]}-01-01" if row[4] else "2015",  # house_year
+                    'transaction_time': str(row[5]) if row[5] else "2023",  # transaction_time
+                    'green_rate': float(row[6].strip('%')) / 100 if row[6] and '%' in row[6] else (float(row[6]) if row[6] else 0.3),  # green_rate
+                    'address': row[7] if row[7] else '未知地址',  # house_loc
+                    'transaction_type': 1
+                }
+                comparable_cases.append(case)
+            
+            return comparable_cases
+        except mysql.connector.Error as err:
+            print(f"获取可比案例失败: {err}")
+            return []
+
     @property
     def host(self):
         return self._host
