@@ -7,7 +7,7 @@ import sys
 import json
 import re
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context
 from werkzeug.utils import secure_filename
 import pandas as pd
 from price.careful_selection import careful_selection
@@ -143,177 +143,162 @@ def api_valuation():
     try:
         data = request.get_json()
         
-        # 提取房产数据
-        property_data = {
-            "address": data.get('address'),
-            "city": data.get('city'),
-            "property_cert_image": data.get('cert_image'),
-            "property_photo": data.get('property_photo'),
-            "property_text": data.get('description')
-        }
-        
-        # 处理房产数据
-        processed_data = valuation_system.process_property_data(property_data)
-        
-        # 准备目标房产数据
-        target_property = {
-            "size": float(data.get('area', 90)),
-            "floor": data.get('floor', '中楼层'),
-            "fitment": data.get('fitment', '简装'),
-            "built_time": f"{data.get('year', 2015)}",
-            "room": int(data.get('room', 2)),
-            "hall": int(data.get('hall', 1)),
-            "kitchen": int(data.get('kitchen', 1)),
-            "bathroom": int(data.get('bathroom', 1)),
-            "green_rate": processed_data.get("enhanced_data", {}).get("property_info", {}).get("green_rate", 0.3),
-            "transaction_type": 1
-        }
-        
-        # 估算房产价值
-        # 尝试从数据库获取可比案例
-        comparable_cases = None
-        try:
-            mysql_manager = MySQLManager()
-            city = data.get('city', '上海')
-            
-            # 使用careful_selection进行精筛
-            # house_type = processed_data.get("enhanced_data", {}).get("property_info", {}).get("house_type", "2室1厅1厨1卫")
-            # 从前端获取户型信息
-            room = data.get('room', 2)
-            hall = data.get('hall', 1)
-            kitchen = data.get('kitchen', 1)
-            bathroom = data.get('bathroom', 1)
-            house_type = f"{room}室{hall}厅{kitchen}厨{bathroom}卫"
-            
-            house_loc = data.get('address', '')
-            
-            selction_example = careful_selection(
-                username=mysql_manager._username,
-                password=mysql_manager._password,
-                host=mysql_manager._host,
-                port=mysql_manager._port,
-                database=mysql_manager._db,
-                table=mysql_manager.get_table(city),
-                house_floor=target_property['floor'],
-                house_area=target_property['size'],
-                house_type=house_type,
-                house_decoration=target_property['fitment'],
-                house_year=int(target_property['built_time'].split('-')[0]),
-                house_loc=house_loc
-            )
-            # print args for careful_seslection
-            print(f"careful_selection args:\nhouse_floor: {target_property['floor']}\nhouse_area: {target_property['size']}\nhouse_type: {house_type}\nhouse_decoration: {target_property['fitment']}\nhouse_year: {int(target_property['built_time'].split('-')[0])}\nhouse_loc: {house_loc}")
-            
-            df = selction_example.selction()
-            mysql_manager.close()
-            
-            if df:
-                print(f"精筛成功，获取到 {len(df)} 个可比案例")
-                # 转换df为comparable_cases格式
-                comparable_cases = []
-                for i in df[:]:
-                    case = {
-                        'price': float(i["u_price"]),
-                        'size': float(i['house_area']),
-                        'floor': i['house_floor'],
-                        'fitment': i['house_decoration'],
-                        'built_time': f"{i['house_year']}",
-                        'transaction_time': str(i['transaction_time']),
-                        'green_rate': i.get('green_rate', 0.3),
-                        'address': i['house_loc'],
-                        'transaction_type': 1
-                    }
-                    comparable_cases.append(case)
-            else:
-                print("精筛失败，没有找到合适的案例，将使用示例案例")
-        except Exception as e:
-            print(f"获取可比案例失败: {str(e)}")
-            import traceback
-            traceback.print_exc()
-        
-        estimation_result = valuation_system.estimate_property_value(target_property, comparable_cases)
-        
-        # 房价趋势预测
-        trend_factor = 0.0
-        min_trend = 0.0
-        max_trend = 0.0
-        
-        try:
-            # 从地址中提取区域信息
-            address = data.get('address', '')
-            city = data.get('city', '上海')
-            region = city + address
-            
-            # 计算时间范围
-            currentTime = datetime.now()
-            # 过去6个月
-            beforeTime = currentTime - timedelta(days=180)
-            # 未来2个月
-            afterTime = currentTime + timedelta(days=60)
-
-            time_range = f"{beforeTime.strftime('%Y年%m月')}-{afterTime.strftime('%Y年%m月')}"
-            
-            query = f"{time_range}, {region}的房价走势如何?"
-            
-            print(f"正在进行房价趋势预测: {query}")
-            
-            prediction = predict_region(query, max_retries=3, enable_evolution=False, debug=True)
-            
-            if prediction:
-                # 提取趋势因子
-                min_trend, max_trend = extract_trend_factor(prediction)
-                trend_factor = (min_trend + max_trend) / 2.0
-                print(f"提取到的趋势因子范围: {min_trend:.2%} ~ {max_trend:.2%}")
-            
-        except Exception as e:
-            print(f"房价预测失败: {str(e)}")
-
-        # 应用趋势调整
-        original_price = estimation_result['estimated_price']
-        if original_price is not None:
-            # 计算调整后的价格范围
-            min_adjusted_price = original_price * (1 + min_trend)
-            max_adjusted_price = original_price * (1 + max_trend)
-            
-            estimation_result['estimated_price'] = (min_adjusted_price + max_adjusted_price) / 2
-            estimation_result['original_price'] = original_price
-            estimation_result['trend_factor'] = trend_factor
-            estimation_result['price_range'] = [min_adjusted_price, max_adjusted_price]
-            
-            # 更新解释
-            if trend_factor != 0:
-                trend_desc = "上涨" if trend_factor > 0 else "下跌"
+        def generate():
+            try:
+                # 1. 提取和处理房产数据
+                yield json.dumps({"status": "progress", "stage": "process", "message": "正在处理房产数据及地图..."}) + "\n"
                 
-                # 构建趋势描述字符串
-                if min_trend == max_trend:
-                    trend_str = f"{abs(trend_factor):.2%}"
-                else:
-                    # 确保显示顺序正确（从小到大）
-                    abs_min = abs(min_trend)
-                    abs_max = abs(max_trend)
-                    trend_str = f"{min(abs_min, abs_max):.2%} ~ {max(abs_min, abs_max):.2%}"
+                property_data = {
+                    "address": data.get('address'),
+                    "city": data.get('city'),
+                    "property_cert_image": data.get('cert_image'),
+                    "property_photo": data.get('property_photo'),
+                    "property_text": data.get('description')
+                }
+                
+                # 处理房产数据 (内部会包含地图获取)
+                processed_data = valuation_system.process_property_data(property_data)
+                yield json.dumps({"status": "progress", "stage": "process", "message": "已完成房产数据及地图处理", "done": True}) + "\n"
+                
+                # 准备目标房产数据
+                target_property = {
+                    "size": float(data.get('area', 90)),
+                    "floor": data.get('floor', '中楼层'),
+                    "fitment": data.get('fitment', '简装'),
+                    "built_time": f"{data.get('year', 2015)}",
+                    "room": int(data.get('room', 2)),
+                    "hall": int(data.get('hall', 1)),
+                    "kitchen": int(data.get('kitchen', 1)),
+                    "bathroom": int(data.get('bathroom', 1)),
+                    "green_rate": processed_data.get("enhanced_data", {}).get("property_info", {}).get("green_rate", 0.3),
+                    "transaction_type": 1
+                }
+                
+                # 2. 匹配历史可比案例及估算价值
+                yield json.dumps({"status": "progress", "stage": "estimate", "message": "正在匹配案例并估算房产价值..."}) + "\n"
+                comparable_cases = None
+                mysql_manager = None
+                try:
+                    mysql_manager = MySQLManager()
+                    city = data.get('city', '上海')
+                    
+                    room = data.get('room', 2)
+                    hall = data.get('hall', 1)
+                    kitchen = data.get('kitchen', 1)
+                    bathroom = data.get('bathroom', 1)
+                    house_type = f"{room}室{hall}厅{kitchen}厨{bathroom}卫"
+                    
+                    house_loc = data.get('address', '')
+                    
+                    selction_example = careful_selection(
+                        username=mysql_manager._username,
+                        password=mysql_manager._password,
+                        host=mysql_manager._host,
+                        port=mysql_manager._port,
+                        database=mysql_manager._db,
+                        table=mysql_manager.get_table(city),
+                        house_floor=target_property['floor'],
+                        house_area=target_property['size'],
+                        house_type=house_type,
+                        house_decoration=target_property['fitment'],
+                        house_year=int(target_property['built_time'].split('-')[0]),
+                        house_loc=house_loc
+                    )
+                    
+                    df = selction_example.selction()
+                    
+                    if df:
+                        comparable_cases = []
+                        for i in df[:]:
+                            case = {
+                                'price': float(i["u_price"]),
+                                'size': float(i['house_area']),
+                                'floor': i['house_floor'],
+                                'fitment': i['house_decoration'],
+                                'built_time': f"{i['house_year']}",
+                                'transaction_time': str(i['transaction_time']),
+                                'green_rate': i.get('green_rate', 0.3),
+                                'address': i['house_loc'],
+                                'transaction_type': 1
+                            }
+                            comparable_cases.append(case)
+                except Exception as e:
+                    print(f"获取可比案例失败: {str(e)}")
+                finally:
+                    if mysql_manager:
+                        mysql_manager.close()
+                
+                # 开始估价计算
+                estimation_result = valuation_system.estimate_property_value(target_property, comparable_cases)
+                yield json.dumps({"status": "progress", "stage": "estimate", "message": "已完成房产价值估算分析", "done": True}) + "\n"
+                
+                # 3. 预测房价趋势微调
+                yield json.dumps({"status": "progress", "stage": "predict", "message": "正在预测房价趋势并微调结果..."}) + "\n"
+                trend_factor = 0.0
+                min_trend = 0.0
+                max_trend = 0.0
+                
+                try:
+                    address = data.get('address', '')
+                    city = data.get('city', '上海')
+                    region = city + address
+                    currentTime = datetime.now()
+                    beforeTime = currentTime - timedelta(days=180)
+                    afterTime = currentTime + timedelta(days=60)
+                    time_range = f"{beforeTime.strftime('%Y年%m月')}-{afterTime.strftime('%Y年%m月')}"
+                    
+                    query = f"{time_range}, {region}的房价走势如何?"
+                    prediction = predict_region(query, max_retries=3, enable_evolution=False, debug=True)
+                    
+                    if prediction:
+                        min_trend, max_trend = extract_trend_factor(prediction)
+                        trend_factor = (min_trend + max_trend) / 2.0
+                except Exception as e:
+                    print(f"房价预测失败: {str(e)}")
 
-                estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {time_range} 的房价趋势预测，\n市场预期{trend_desc} {trend_str}。\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{min_adjusted_price:.2f} - {max_adjusted_price:.2f} 元/平"
+                # 应用趋势调整
+                original_price = estimation_result['estimated_price']
+                if original_price is not None:
+                    min_adjusted_price = original_price * (1 + min_trend)
+                    max_adjusted_price = original_price * (1 + max_trend)
+                    estimation_result['estimated_price'] = (min_adjusted_price + max_adjusted_price) / 2
+                    estimation_result['original_price'] = original_price
+                    estimation_result['trend_factor'] = trend_factor
+                    estimation_result['price_range'] = [min_adjusted_price, max_adjusted_price]
+                    
+                    if trend_factor != 0:
+                        trend_desc = "上涨" if trend_factor > 0 else "下跌"
+                        abs_min = abs(min_trend)
+                        abs_max = abs(max_trend)
+                        trend_str = f"{min(abs_min, abs_max):.2%} ~ {max(abs_min, abs_max):.2%}"
+                        estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {time_range} 的房价趋势预测，\n市场预期{trend_desc} {trend_str}。\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{min_adjusted_price:.2f} - {max_adjusted_price:.2f} 元/平"
 
-        # 生成报告
-        report_path = valuation_system.generate_report(property_data, estimation_result, target_property)
-        
-        area = float(data.get('area', 90))
-        total_price = estimation_result['estimated_price'] * area
-        
-        # 构建响应
-        response = {
-            'success': True,
-            'estimated_price': estimation_result['estimated_price'],
-            'price_range': estimation_result.get('price_range', [estimation_result['estimated_price'], estimation_result['estimated_price']]),
-            'confidence': estimation_result['confidence'],
-            'total_price': total_price,
-            'total_price_range': [p * area for p in estimation_result.get('price_range', [estimation_result['estimated_price'], estimation_result['estimated_price']])],
-            'explanation': estimation_result['explanation'],
-            'report_path': report_path,
-        }
-        
-        return jsonify(response)
+                yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成趋势预测与价值微调", "done": True}) + "\n"
+
+                # 生成报告
+                report_path = valuation_system.generate_report(property_data, estimation_result, target_property)
+                area = float(data.get('area', 90))
+                total_price = estimation_result['estimated_price'] * area
+                
+                # 构建最终响应
+                response_data = {
+                    'success': True,
+                    'estimated_price': estimation_result['estimated_price'],
+                    'price_range': estimation_result.get('price_range', [estimation_result['estimated_price'], estimation_result['estimated_price']]),
+                    'confidence': estimation_result['confidence'],
+                    'total_price': total_price,
+                    'total_price_range': [p * area for p in estimation_result.get('price_range', [estimation_result['estimated_price'], estimation_result['estimated_price']])],
+                    'explanation': estimation_result['explanation'],
+                    'report_path': report_path,
+                }
+                
+                yield json.dumps({"status": "success", "result": response_data}) + "\n"
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                yield json.dumps({"status": "error", "message": str(e)}) + "\n"
+
+        return Response(stream_with_context(generate()), mimetype='application/x-ndjson')
     
     except Exception as e:
         print(f"估值失败: {str(e)}")

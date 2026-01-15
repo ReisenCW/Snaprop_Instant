@@ -18,6 +18,42 @@ block extra_css %}
     width: 3rem;
     height: 3rem;
   }
+  .step-item {
+    padding: 12px 0;
+    transition: all 0.3s;
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    padding-left: 15%;
+  }
+  .step-item i {
+    width: 35px;
+    font-size: 1.5rem;
+  }
+  .step-waiting {
+    color: #6c757d;
+  }
+  .step-active {
+    color: #0d6efd;
+    font-weight: bold;
+    transform: scale(1.02);
+  }
+  .step-done {
+    color: #198754;
+    font-weight: bold;
+  }
+  .spin {
+    animation: rotate 2s linear infinite;
+    display: inline-block;
+  }
+  @keyframes rotate {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
 </style>
 {% endblock %} {% block content %}
 <div class="row">
@@ -220,12 +256,25 @@ block extra_css %}
   <div class="col-lg-6">
     <!-- 加载中提示 -->
     <div id="loadingIndicator" class="loading">
-      <div class="d-flex justify-content-center">
+      <div class="d-flex justify-content-center mb-4">
         <div class="spinner-border loading-spinner text-primary" role="status">
           <span class="visually-hidden">加载中...</span>
         </div>
       </div>
-      <p class="mt-3">正在进行房产估值分析，请稍候...</p>
+      <div class="mx-auto" style="max-width: 450px">
+        <div id="step-process" class="step-item step-waiting">
+          <i class="bi bi-circle me-3"></i>
+          <span>正在处理房产数据及地图...</span>
+        </div>
+        <div id="step-estimate" class="step-item step-waiting">
+          <i class="bi bi-circle me-3"></i>
+          <span>正在匹配案例并估算价值...</span>
+        </div>
+        <div id="step-predict" class="step-item step-waiting">
+          <i class="bi bi-circle me-3"></i>
+          <span>正在预测趋势并微调结果...</span>
+        </div>
+      </div>
     </div>
 
     <!-- 估值结果 -->
@@ -317,7 +366,7 @@ block extra_css %}
   }
 
   // 提交估值表单
-  function submitValuation() {
+  async function submitValuation() {
     // 获取表单数据
     const formData = {
       address: document.getElementById("address").value,
@@ -335,75 +384,150 @@ block extra_css %}
       description: document.getElementById("description").value,
     };
 
+    // 重置进度 UI
+    const steps = ["process", "estimate", "predict"];
+    steps.forEach((s) => {
+      const el = document.getElementById("step-" + s);
+      el.className = "step-item step-waiting";
+      el.querySelector("i").className = "bi bi-circle me-3";
+      // 恢复原始文本
+      const defaultTexts = {
+        process: "正在处理房产数据及地图...",
+        estimate: "正在匹配案例并估算价值...",
+        predict: "正在预测趋势并微调结果...",
+      };
+      el.querySelector("span").textContent = defaultTexts[s];
+    });
+
     // 显示加载指示器
     document.getElementById("loadingIndicator").style.display = "block";
     document.getElementById("resultCard").style.display = "none";
 
-    // 发送请求
-    axios
-      .post("/api/valuation", formData)
-      .then(function (response) {
-        // 隐藏加载指示器
-        document.getElementById("loadingIndicator").style.display = "none";
-
-        if (response.data.success) {
-          // 显示结果
-          document.getElementById("resultCard").style.display = "block";
-
-          // 填充数据
-          if (
-            response.data.total_price_range &&
-            response.data.total_price_range.length === 2
-          ) {
-            document.getElementById("totalPrice").textContent =
-              formatCurrency(response.data.total_price_range[0]) +
-              " - " +
-              formatCurrency(response.data.total_price_range[1]);
-          } else {
-            document.getElementById("totalPrice").textContent = formatCurrency(
-              response.data.total_price
-            );
-          }
-
-          if (
-            response.data.price_range &&
-            response.data.price_range.length === 2
-          ) {
-            document.getElementById("unitPrice").textContent =
-              formatCurrency(response.data.price_range[0]) +
-              " - " +
-              formatCurrency(response.data.price_range[1]) +
-              " 元/平方米";
-          } else {
-            document.getElementById("unitPrice").textContent =
-              formatCurrency(response.data.estimated_price) + " 元/平方米";
-          }
-
-          const confidence = response.data.confidence * 100;
-          document.getElementById("confidence").textContent =
-            confidence.toFixed(2) + "%";
-          document.getElementById("confidenceBar").style.width =
-            confidence + "%";
-
-          document.getElementById("explanation").textContent =
-            response.data.explanation;
-
-          // 设置报告链接
-          if (response.data.report_path) {
-            const reportFilename = response.data.report_path.split("/").pop();
-            document.getElementById("reportLink").href =
-              "/report/" + reportFilename;
-          }
-        } else {
-          alert("估值失败: " + response.data.error);
-        }
-      })
-      .catch(function (error) {
-        // 隐藏加载指示器
-        document.getElementById("loadingIndicator").style.display = "none";
-        console.error("估值错误:", error);
-        alert("估值请求出错，请重试");
+    try {
+      const response = await fetch("/api/valuation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
       });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
+            if (data.status === "progress") {
+              const el = document.getElementById("step-" + data.stage);
+              if (data.done) {
+                el.className = "step-item step-done";
+                el.querySelector("i").className =
+                  "bi bi-check-circle-fill me-3";
+                el.querySelector("span").textContent = data.message;
+              } else {
+                // 将之前正在进行的改为已完成（如果后端逻辑跳过了一些显式通知）
+                const currentIndex = steps.indexOf(data.stage);
+                for (let i = 0; i < currentIndex; i++) {
+                  const prevEl = document.getElementById("step-" + steps[i]);
+                  if (prevEl.classList.contains("step-active")) {
+                    prevEl.className = "step-item step-done";
+                    prevEl.querySelector("i").className =
+                      "bi bi-check-circle-fill me-3";
+                  }
+                }
+
+                el.className = "step-item step-active";
+                el.querySelector("i").className =
+                  "bi bi-arrow-repeat spin me-3";
+                el.querySelector("span").textContent = data.message;
+              }
+            } else if (data.status === "success") {
+              // 确保所有步骤都显示完成
+              steps.forEach((s) => {
+                const el = document.getElementById("step-" + s);
+                el.className = "step-item step-done";
+                el.querySelector("i").className =
+                  "bi bi-check-circle-fill me-3";
+              });
+
+              // 处理最终结果
+              setTimeout(() => {
+                document.getElementById("loadingIndicator").style.display =
+                  "none";
+                handleResult(data.result);
+              }, 500); // 稍微延迟一下让用户看清“全部完成”
+            }
+          } catch (e) {
+            console.error("解析流式数据失败:", e, line);
+          }
+        }
+      }
+    } catch (error) {
+      document.getElementById("loadingIndicator").style.display = "none";
+      console.error("估值错误:", error);
+      alert("估值请求出错，请重试");
+    }
+  }
+
+  // 处理最终结果显示
+  function handleResult(result) {
+    if (result.success) {
+      // 显示结果卡片
+      document.getElementById("resultCard").style.display = "block";
+
+      // 填充数据
+      if (result.total_price_range && result.total_price_range.length === 2) {
+        document.getElementById("totalPrice").textContent =
+          formatCurrency(result.total_price_range[0]) +
+          " - " +
+          formatCurrency(result.total_price_range[1]);
+      } else {
+        document.getElementById("totalPrice").textContent = formatCurrency(
+          result.total_price
+        );
+      }
+
+      if (result.price_range && result.price_range.length === 2) {
+        document.getElementById("unitPrice").textContent =
+          formatCurrency(result.price_range[0]) +
+          " - " +
+          formatCurrency(result.price_range[1]) +
+          " 元/平方米";
+      } else {
+        document.getElementById("unitPrice").textContent =
+          formatCurrency(result.estimated_price) + " 元/平方米";
+      }
+
+      const confidence = result.confidence * 100;
+      document.getElementById("confidence").textContent =
+        confidence.toFixed(2) + "%";
+      document.getElementById("confidenceBar").style.width = confidence + "%";
+
+      document.getElementById("explanation").textContent = result.explanation;
+
+      // 设置报告链接
+      if (result.report_path) {
+        const reportFilename = result.report_path.split("/").pop();
+        document.getElementById("reportLink").href =
+          "/report/" + reportFilename;
+      }
+
+      // 自动滚动到结果
+      document
+        .getElementById("resultCard")
+        .scrollIntoView({ behavior: "smooth" });
+    } else {
+      alert("估值失败: " + result.error);
+    }
   }
 
   // 格式化货币
