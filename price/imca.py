@@ -490,6 +490,13 @@ class IMCA:
         explanation += "\n主要影响因素：\n"
         
         # 分析物理特性
+        if 'room' in target_property and 'hall' in target_property:
+            explanation += f"- 户型：目标房产为 {target_property['room']}室{target_property['hall']}厅{target_property.get('kitchen', 1)}厨{target_property.get('bathroom', 1)}卫，"
+            if target_property['room'] >= 3:
+                explanation += "属于宽阔户型，适合家庭居住。\n"
+            else:
+                explanation += "户型紧凑，功能齐全。\n"
+        
         if 'size' in target_property:
             explanation += f"- 面积：目标房产面积为 {target_property['size']} 平方米"
             if target_property['size'] > 120:

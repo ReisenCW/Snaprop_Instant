@@ -6,8 +6,38 @@
     <title>估值报告详情 - 房估宝</title>
   </head>
   <body>
-    {% extends "base.html" %} {% block title %}估值报告详情 - 房估宝{% endblock
-    %} {% block content %}
+    {% extends "base.html" %} 
+    {% block title %}估值报告详情 - 房估宝{% endblock %} 
+    {% block extra_css %}
+    <style>
+      .module-header {
+        border-left: 5px solid #0d6efd;
+        padding-left: 15px;
+        margin-bottom: 20px;
+        background-color: #f8f9fa;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        border-radius: 0 5px 5px 0;
+      }
+      .module-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #0d6efd;
+        margin-bottom: 0;
+      }
+      .explanation-text {
+        line-height: 1.6;
+        color: #495057;
+      }
+      .factor-item {
+        margin-bottom: 10px;
+        padding: 8px;
+        border-radius: 4px;
+        background-color: #f1f3f5;
+      }
+    </style>
+    {% endblock %}
+    {% block content %}
     <div class="row">
       <div class="col-lg-10 mx-auto">
         <h1 class="mb-4">估值报告详情</h1>
@@ -107,18 +137,53 @@
                   report.target_property.built_time[:4] }}
                 </p>
               </div>
+              {% if report.target_property.room is defined %}
+              <div class="col-md-6">
+                <p>
+                  <strong>户型：</strong>{{ report.target_property.room }}室{{ report.target_property.hall }}厅{{ report.target_property.kitchen }}厨{{ report.target_property.bathroom }}卫
+                </p>
+              </div>
+              {% endif %}
             </div>
           </div>
         </div>
 
         <div class="card mb-4">
           <div class="card-header">
-            <h5 class="mb-0">估值解释</h5>
+            <h5 class="mb-0">估值详细分析</h5>
           </div>
           <div class="card-body">
-            <p style="white-space: pre-line">
-              {{ report.estimation_result.explanation }}
-            </p>
+            {% set explanation = report.estimation_result.explanation %}
+            {% if "【市场趋势调整】" in explanation %}
+              {% set parts = explanation.split("【市场趋势调整】") %}
+              
+              <div class="valuation-module mb-5">
+                <div class="module-header bg-light border-start border-primary border-5 p-3 mb-4">
+                  <h4 class="module-title text-primary"><i class="bi bi-graph-up pe-2"></i>市场比较法分析</h4>
+                </div>
+                <div class="explanation-text px-3" style="white-space: pre-line">
+                  {{ parts[0].strip() }}
+                </div>
+              </div>
+
+              <div class="valuation-module">
+                <div class="module-header bg-light border-start border-success border-5 p-3 mb-4">
+                  <h4 class="module-title text-success"><i class="bi bi-arrow-up-right-circle pe-2"></i>市场趋势调整</h4>
+                </div>
+                <div class="explanation-text px-3" style="white-space: pre-line">
+                  {{ parts[1].strip() }}
+                </div>
+              </div>
+            {% else %}
+              <div class="valuation-module">
+                <div class="module-header bg-light border-start border-primary border-5 p-3 mb-4">
+                  <h4 class="module-title text-primary"><i class="bi bi-graph-up pe-2"></i>市场比较法分析</h4>
+                </div>
+                <div class="explanation-text px-3" style="white-space: pre-line">
+                  {{ explanation.strip() }}
+                </div>
+              </div>
+            {% endif %}
           </div>
         </div>
 

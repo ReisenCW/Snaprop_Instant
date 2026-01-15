@@ -161,6 +161,10 @@ def api_valuation():
             "floor": data.get('floor', '中楼层'),
             "fitment": data.get('fitment', '简装'),
             "built_time": f"{data.get('year', 2015)}",
+            "room": int(data.get('room', 2)),
+            "hall": int(data.get('hall', 1)),
+            "kitchen": int(data.get('kitchen', 1)),
+            "bathroom": int(data.get('bathroom', 1)),
             "green_rate": processed_data.get("enhanced_data", {}).get("property_info", {}).get("green_rate", 0.3),
             "transaction_type": 1
         }
