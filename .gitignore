@@ -1,0 +1,6 @@
+.idea/
+.github/
+__pycache__/
+.venv/
+cot_trajectory.json
+reflection_history.json

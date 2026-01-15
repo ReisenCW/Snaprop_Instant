@@ -3,17 +3,22 @@ import os
 class Config:
     # API配置
     DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")  # 阿里云DashScope API密钥
-    MODEL = "qwen3-max"  # 使用的模型名称
+    # 使用的模型
+    # MODEL = "qwen3-max"
+    MODEL = "glm-4.7"
+    WEB_MODEL = "qwen3-max"
+    FAST_MODEL = "qwen-flash"
     # 迭代与搜索配置
     MAX_ITERATIONS = 1  # 预测时的最大搜索迭代次数
-    MAX_RETRIES = 2  # 预测错误时的最大重试次数
+    MAX_RETRIES = 4  # 预测错误时的最大重试次数
     SEARCH_TIMEOUT = 30  # 搜索超时时间（秒）
-    SCORE_THRESHOLD = 75  # 评分阈值，低于该分数则进行反思和重试
+    SCORE_THRESHOLD = 80  # 评分阈值，低于该分数则进行反思和重试
     # 是否进化
     ENABLE_EVOLUTION = True  # 是否启用进化
     # 日志与存储
     DEBUG = True  # 是否开启调试日志
     REFLECTION_HISTORY_PATH = "reflection_history.json"  # 反思记录路径
+    CHROMA_DB_PATH = "./chroma_db"  # ChromaDB 存储路径
     COT_TRAJECTORY_PATH = "cot_trajectory.json"  # COT轨迹记录路径
     ANSWER_PATH = "./answer/"  # 最终答案存储路径
     # COT / reflection 控制选项：

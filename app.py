@@ -242,20 +242,22 @@ def api_valuation():
             
             # 计算时间范围
             currentTime = datetime.now()
-            # 过去6个月作为参考（用于分析趋势）
+            # 过去6个月
             beforeTime = currentTime - timedelta(days=180)
-            # 未来2个月作为预测（用于修正当前估值）
+            # 未来2个月
             afterTime = currentTime + timedelta(days=60)
 
-            time_range = f"{beforeTime.strftime('%Y年%m月')}-{currentTime.strftime('%Y年%m月')}"
-            currentTimeRange = f"{currentTime.strftime('%Y年%m月')}-{afterTime.strftime('%Y年%m月')}"
+            time_range = f"{beforeTime.strftime('%Y年%m月')}-{afterTime.strftime('%Y年%m月')}"
             
-            print(f"正在进行房价趋势预测: {region}, {time_range} -> {currentTimeRange}")
-            _, follow_up_pred = predict_region(region, time_range, currentTimeRange)
+            query = f"{time_range}, {region}的房价走势如何?"
             
-            if follow_up_pred:
+            print(f"正在进行房价趋势预测: {query}")
+            
+            prediction = predict_region(query, max_retries=3, enable_evolution=False, debug=True)
+            
+            if prediction:
                 # 提取趋势因子
-                min_trend, max_trend = extract_trend_factor(follow_up_pred)
+                min_trend, max_trend = extract_trend_factor(prediction)
                 trend_factor = (min_trend + max_trend) / 2.0
                 print(f"提取到的趋势因子范围: {min_trend:.2%} ~ {max_trend:.2%}")
             
@@ -287,7 +289,7 @@ def api_valuation():
                     abs_max = abs(max_trend)
                     trend_str = f"{min(abs_min, abs_max):.2%} ~ {max(abs_min, abs_max):.2%}"
 
-                estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {currentTimeRange} 的房价趋势预测，\n市场预期{trend_desc} {trend_str}。\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{min_adjusted_price:.2f} - {max_adjusted_price:.2f} 元/平"
+                estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {time_range} 的房价趋势预测，\n市场预期{trend_desc} {trend_str}。\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{min_adjusted_price:.2f} - {max_adjusted_price:.2f} 元/平"
 
         # 生成报告
         report_path = valuation_system.generate_report(property_data, estimation_result, target_property)
