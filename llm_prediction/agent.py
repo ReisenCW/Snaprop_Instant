@@ -1,17 +1,17 @@
 import os
-from llm_utils import call_llm
-from config import Config
+from llm_prediction.llm_utils import call_llm
+from llm_prediction.config import Config
 import json
-from prompts import PROMPTS, SYSTEM_PROMPTS
+from llm_prediction.prompts import PROMPTS, SYSTEM_PROMPTS
 from datetime import datetime
 import re
 
-from agents.query_agent import QueryAgent
-from agents.search_agent import SearchAgent
-from agents.predictor_agent import PredictorAgent
-from agents.reflector_agent import ReflectorAgent
-from agents.memory_agent import MemoryAgent
-from agents.evaluator_agent import EvaluatorAgent
+from llm_prediction.agents.query_agent import QueryAgent
+from llm_prediction.agents.search_agent import SearchAgent
+from llm_prediction.agents.predictor_agent import PredictorAgent
+from llm_prediction.agents.reflector_agent import ReflectorAgent
+from llm_prediction.agents.memory_agent import MemoryAgent
+from llm_prediction.agents.evaluator_agent import EvaluatorAgent
 
 class HousePriceAgent:
     def __init__(self, config: Config):

@@ -1,5 +1,5 @@
-from llm_utils import call_llm
-from config import Config
+from llm_prediction.llm_utils import call_llm
+from llm_prediction.config import Config
 
 class BaseAgent:
     def __init__(self, config: Config, model: str = None, think: bool = False):

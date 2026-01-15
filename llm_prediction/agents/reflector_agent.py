@@ -1,5 +1,5 @@
-from agents.base_agent import BaseAgent
-from prompts import PROMPTS, SYSTEM_PROMPTS
+from llm_prediction.agents.base_agent import BaseAgent
+from llm_prediction.prompts import PROMPTS, SYSTEM_PROMPTS
 
 class ReflectorAgent(BaseAgent):
     def __init__(self, config, model=None, think=True):

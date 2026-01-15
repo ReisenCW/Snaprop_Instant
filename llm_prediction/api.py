@@ -1,9 +1,9 @@
 ﻿import asyncio
 import re
 from typing import Optional, Tuple
-from agent import HousePriceAgent
-from agents.evaluator_agent import EvaluatorAgent
-from config import Config
+from llm_prediction.agent import HousePriceAgent
+from llm_prediction.agents.evaluator_agent import EvaluatorAgent
+from llm_prediction.config import Config
 
 def get_backtest_time_range(target_time: str) -> str:
     """
