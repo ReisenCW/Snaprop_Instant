@@ -10,7 +10,7 @@ class Config:
     FAST_MODEL = "qwen-flash"
     # 迭代与搜索配置
     MAX_ITERATIONS = 1  # 预测时的最大搜索迭代次数
-    MAX_RETRIES = 4  # 预测错误时的最大重试次数
+    MAX_RETRIES = 2  # 预测错误时的最大重试次数
     SEARCH_TIMEOUT = 30  # 搜索超时时间（秒）
     SCORE_THRESHOLD = 80  # 评分阈值，低于该分数则进行反思和重试
     # 是否进化
