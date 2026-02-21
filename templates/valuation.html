@@ -18,13 +18,29 @@ block extra_css %}
     width: 3rem;
     height: 3rem;
   }
+  .price-highlight {
+    color: #dc3545;
+    font-weight: 800;
+    font-size: 2.6rem; /* 稍微再大一点 */
+  }
+  .unit-price-highlight {
+    color: #198754;
+    font-weight: 700;
+    font-size: 2.2rem; /* 让单价也更清晰 */
+  }
+  .result-header {
+    border-bottom: 2px solid #f8f9fa;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+  }
   .step-item {
+    margin: 0 auto;
+    max-width: 500px;
     padding: 12px 0;
     transition: all 0.3s;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     display: flex;
     align-items: center;
-    padding-left: 15%;
   }
   .step-item i {
     width: 35px;
@@ -64,148 +80,11 @@ block extra_css %}
 </div>
 
 <div class="row">
+  <!-- 左边：拍照上传 -->
   <div class="col-lg-6">
     <div class="card shadow-sm mb-4">
       <div class="card-header bg-primary text-white">
-        <h5 class="card-title mb-0">基本信息</h5>
-      </div>
-      <div class="card-body">
-        <form id="valuationForm">
-          <div class="mb-3">
-            <label for="address" class="form-label"
-              >房产地址 <span class="text-danger">*</span></label
-            >
-            <input
-              type="text"
-              class="form-control"
-              id="address"
-              name="address"
-              required
-            />
-          </div>
-          <div class="mb-3">
-            <label for="city" class="form-label"
-              >所在城市 <span class="text-danger">*</span></label
-            >
-            <input
-              type="text"
-              class="form-control"
-              id="city"
-              name="city"
-              required
-            />
-          </div>
-          <div class="mb-3">
-            <label for="area" class="form-label"
-              >建筑面积(平方米) <span class="text-danger">*</span></label
-            >
-            <input
-              type="number"
-              class="form-control"
-              id="area"
-              name="area"
-              min="1"
-              step="0.01"
-              required
-            />
-          </div>
-          <div class="row">
-            <div class="col-md-4">
-              <div class="mb-3">
-                <label for="floor" class="form-label">楼层</label>
-                <select class="form-select" id="floor" name="floor">
-                  <option value="低楼层">低楼层</option>
-                  <option value="中楼层" selected>中楼层</option>
-                  <option value="高楼层">高楼层</option>
-                </select>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="mb-3">
-                <label for="fitment" class="form-label">装修状况</label>
-                <select class="form-select" id="fitment" name="fitment">
-                  <option value="毛坯">毛坯</option>
-                  <option value="简装" selected>简装</option>
-                  <option value="精装">精装</option>
-                </select>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="mb-3">
-                <label for="year" class="form-label">建成年份</label>
-                <input
-                  type="number"
-                  class="form-control"
-                  id="year"
-                  name="year"
-                  min="1900"
-                  max="2023"
-                  value="2015"
-                />
-              </div>
-            </div>
-          </div>
-          <div class="row">
-            <div class="col-md-3">
-              <div class="mb-3">
-                <label for="room" class="form-label">室</label>
-                <input
-                  type="number"
-                  class="form-control"
-                  id="room"
-                  name="room"
-                  min="0"
-                  value="2"
-                />
-              </div>
-            </div>
-            <div class="col-md-3">
-              <div class="mb-3">
-                <label for="hall" class="form-label">厅</label>
-                <input
-                  type="number"
-                  class="form-control"
-                  id="hall"
-                  name="hall"
-                  min="0"
-                  value="1"
-                />
-              </div>
-            </div>
-            <div class="col-md-3">
-              <div class="mb-3">
-                <label for="kitchen" class="form-label">厨</label>
-                <input
-                  type="number"
-                  class="form-control"
-                  id="kitchen"
-                  name="kitchen"
-                  min="0"
-                  value="1"
-                />
-              </div>
-            </div>
-            <div class="col-md-3">
-              <div class="mb-3">
-                <label for="bathroom" class="form-label">卫</label>
-                <input
-                  type="number"
-                  class="form-control"
-                  id="bathroom"
-                  name="bathroom"
-                  min="0"
-                  value="1"
-                />
-              </div>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <div class="card shadow-sm mb-4">
-      <div class="card-header bg-primary text-white">
-        <h5 class="card-title mb-0">多模态信息（可选）</h5>
+        <h5 class="card-title mb-0">拍照上传/描述</h5>
       </div>
       <div class="card-body">
         <div class="mb-3">
@@ -240,28 +119,284 @@ block extra_css %}
             class="form-control"
             id="description"
             name="description"
-            rows="3"
+            rows="5"
             placeholder="请输入房产的详细描述，如户型、朝向、小区环境等"
           ></textarea>
-        </div>
-        <div class="d-grid">
-          <button type="button" id="submitBtn" class="btn btn-primary btn-lg">
-            开始估值
-          </button>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- 右边：基本信息 -->
   <div class="col-lg-6">
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">基本信息</h5>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Version Switch">
+          <input type="radio" class="btn-check" name="versionType" id="standardVersion" value="standard" checked autocomplete="off">
+          <label class="btn btn-outline-light" for="standardVersion">普通版</label>
+          <input type="radio" class="btn-check" name="versionType" id="proVersion" value="professional" autocomplete="off">
+          <label class="btn btn-outline-light" for="proVersion">专业版</label>
+        </div>
+      </div>
+      <div class="card-body">
+        
+          <div class="mb-3">
+            <label for="address" class="form-label"
+              >房产地址 <span class="text-danger">*</span></label
+            >
+            <input
+              type="text"
+              class="form-control"
+              id="address"
+              name="address"
+              required
+            />
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="city" class="form-label"
+                  >所在城市 <span class="text-danger">*</span></label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="city"
+                  name="city"
+                  required
+                />
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="area" class="form-label"
+                  >建筑面积(㎡) <span class="text-danger">*</span></label
+                >
+                <input
+                  type="number"
+                  class="form-control"
+                  id="area"
+                  name="area"
+                  min="1"
+                  step="0.01"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="structure" class="form-label">房屋结构</label>
+                <select class="form-select" id="structure" name="structure">
+                  <option value="平层" selected>平层</option>
+                  <option value="复式">复式</option>
+                  <option value="跃层">跃层</option>
+                  <option value="错层">错层</option>
+                  <option value="其他">其他</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="greening" class="form-label">绿化率(%)</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="greening"
+                  name="greening"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="30"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-4">
+              <div class="mb-3">
+                <label for="floor" class="form-label">楼层</label>
+                <select class="form-select" id="floor" name="floor">
+                  <option value="低楼层">低楼层</option>
+                  <option value="中楼层" selected>中楼层</option>
+                  <option value="高楼层">高楼层</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="mb-3">
+                <label for="fitment" class="form-label">装修状况</label>
+                <select class="form-select" id="fitment" name="fitment">
+                  <option value="毛坯">毛坯</option>
+                  <option value="简装" selected>简装</option>
+                  <option value="精装">精装</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="mb-3">
+                <label for="year" class="form-label">建成年份</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="year"
+                  name="year"
+                  min="1900"
+                  max="2025"
+                  value="2015"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-1 mt-2">
+            <label class="form-label">户型：</label>
+          </div>
+          <div class="row g-2">
+            <div class="col-6 col-md-3">
+              <div class="mb-3">
+                <div class="input-group input-group-sm">
+                  <input
+                    type="number"
+                    class="form-control px-1"
+                    id="room"
+                    name="room"
+                    min="0"
+                    value="2"
+                    style="text-align: center"
+                  />
+                  <span class="input-group-text px-2">室</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="mb-3">
+                <div class="input-group input-group-sm">
+                  <input
+                    type="number"
+                    class="form-control px-1"
+                    id="hall"
+                    name="hall"
+                    min="0"
+                    value="1"
+                    style="text-align: center"
+                  />
+                  <span class="input-group-text px-2">厅</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="mb-3">
+                <div class="input-group input-group-sm">
+                  <input
+                    type="number"
+                    class="form-control px-1"
+                    id="kitchen"
+                    name="kitchen"
+                    min="0"
+                    value="1"
+                    style="text-align: center"
+                  />
+                  <span class="input-group-text px-2">厨</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="mb-3">
+                <div class="input-group input-group-sm">
+                  <input
+                    type="number"
+                    class="form-control px-1"
+                    id="bathroom"
+                    name="bathroom"
+                    min="0"
+                    value="1"
+                    style="text-align: center"
+                  />
+                  <span class="input-group-text px-2">卫</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+        <form id="valuationForm">
+          <!-- 专业版调整面板 -->
+          <div id="proAdjustmentSection" style="display: none;" class="mb-4 p-3 bg-light rounded border">
+            <h6 class="border-bottom pb-2 mb-3">专业调整幅度 (%)</h6>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label for="floor_adj" class="form-label small">楼层</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" class="form-control" id="floor_adj" name="floor_adj" value="2" step="0.1">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label for="area_adj" class="form-label small">面积段</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" class="form-control" id="area_adj" name="area_adj" value="2" step="0.1">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label for="trans_type_adj" class="form-label small">交易类型</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" class="form-control" id="trans_type_adj" name="trans_type_adj" value="30" step="0.1">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label for="decoration_adj" class="form-label small">装修情况</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" class="form-control" id="decoration_adj" name="decoration_adj" value="10" step="0.1">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label for="built_year_adj" class="form-label small">建成年份</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" class="form-control" id="built_year_adj" name="built_year_adj" value="1" step="0.1">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label for="trans_time_adj" class="form-label small">交易时间</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" class="form-control" id="trans_time_adj" name="trans_time_adj" value="8" step="0.1">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+            </div>
+            <div class="form-text small mt-2">说明：输入修正因子（如5%代表每层楼/每年差异调整5%单价）。</div>
+          </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-12">
+    <!-- 开始估值按钮 -->
+    <div class="d-grid mb-4 mx-auto" style="max-width: 400px">
+      <button type="button" id="submitBtn" class="btn btn-primary btn-lg">
+        开始估值
+      </button>
+    </div>
+
     <!-- 加载中提示 -->
-    <div id="loadingIndicator" class="loading">
+    <div id="loadingIndicator" class="loading mb-4">
       <div class="d-flex justify-content-center mb-4">
         <div class="spinner-border loading-spinner text-primary" role="status">
           <span class="visually-hidden">加载中...</span>
         </div>
       </div>
-      <div class="mx-auto" style="max-width: 450px">
+      <div class="text-center">
         <div id="step-process" class="step-item step-waiting">
           <i class="bi bi-circle me-3"></i>
           <span>正在处理房产数据及地图...</span>
@@ -280,46 +415,74 @@ block extra_css %}
     <!-- 估值结果 -->
     <div id="resultCard" class="card shadow-sm mb-4 result-card">
       <div class="card-header bg-success text-white">
-        <h5 class="card-title mb-0">估值结果</h5>
+        <h5 class="card-title mb-0">房产估值详细报告</h5>
       </div>
       <div class="card-body">
-        <div class="text-center mb-4">
-          <h3 class="mb-0" id="totalPrice">-</h3>
-          <p class="text-muted">总价</p>
-          <h4 class="mb-0" id="unitPrice">-</h4>
-          <p class="text-muted">单价（元/平方米）</p>
-          <div class="progress mb-2">
-            <div
-              id="confidenceBar"
-              class="progress-bar bg-success"
-              role="progressbar"
-              style="width: 0%"
-            ></div>
+        <div class="result-header mb-4">
+          <!-- 第一行：总价 -->
+          <div class="text-center mb-4 pb-3 border-bottom">
+            <h4 class="text-secondary fw-bold mb-2">估值总价</h4>
+            <div class="price-highlight" id="totalPrice">-</div>
           </div>
-          <p class="text-muted">置信度: <span id="confidence">-</span></p>
+
+          <!-- 第二行：单价仪表 -->
+          <div class="text-center mb-4 pb-3 border-bottom">
+            <h4 class="text-secondary fw-bold mb-2">估值单价</h4>
+            <div class="unit-price-highlight" id="unitPrice">-</div>
+          </div>
+
+          <!-- 第三行：置信度 -->
+          <div class="text-center mb-3">
+            <h4 class="text-secondary fw-bold mb-2">评估置信度</h4>
+            <div class="d-flex flex-column align-items-center">
+              <h2 class="fw-bold text-success mb-2" id="confidence">-</h2>
+              <div class="progress w-50" style="height: 12px">
+                <div
+                  id="confidenceBar"
+                  class="progress-bar bg-success"
+                  role="progressbar"
+                  style="width: 0%"
+                ></div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <h5>估值解释</h5>
-        <div class="bg-light p-3 rounded mb-3">
-          <p id="explanation" class="mb-0" style="white-space: pre-line">-</p>
+        <h5>估值深度分析</h5>
+        <div class="bg-light p-4 rounded mb-4">
+          <p
+            id="explanation"
+            class="mb-0"
+            style="white-space: pre-line; line-height: 1.8; font-size: 1.1rem"
+          >
+            -
+          </p>
         </div>
 
-        <div class="d-grid gap-2">
+        <div class="d-flex justify-content-center gap-3">
           <a
             id="reportLink"
             href="#"
-            class="btn btn-outline-primary"
+            class="btn btn-primary px-5"
             target="_blank"
-            >查看完整报告</a
+            >导出完整评估报告 (PDF)</a
           >
-          <button type="button" id="newValuationBtn" class="btn btn-secondary">
-            新的估值
+          <button
+            type="button"
+            id="newValuationBtn"
+            class="btn btn-outline-secondary px-4"
+          >
+            重新评估
           </button>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<!-- 隐藏区域：供脚本重置使用以避免报错 -->
+<div id="predictionSection" style="display: none"></div>
+<div id="noPredictionMsg" style="display: none"></div>
 {% endblock %} {% block extra_js %}
 <script>
   // 文件上传预览
@@ -367,6 +530,9 @@ block extra_css %}
 
   // 提交估值表单
   async function submitValuation() {
+    // 获取版本类型
+    const version = document.querySelector('input[name="versionType"]:checked').value;
+    
     // 获取表单数据
     const formData = {
       address: document.getElementById("address").value,
@@ -374,6 +540,8 @@ block extra_css %}
       area: parseFloat(document.getElementById("area").value),
       floor: document.getElementById("floor").value,
       fitment: document.getElementById("fitment").value,
+      structure: document.getElementById("structure").value,
+      greening: parseFloat(document.getElementById("greening").value) || null,
       year: parseInt(document.getElementById("year").value),
       room: parseInt(document.getElementById("room").value),
       hall: parseInt(document.getElementById("hall").value),
@@ -382,7 +550,20 @@ block extra_css %}
       cert_image: document.getElementById("certImagePath").value,
       property_photo: document.getElementById("propertyPhotoPath").value,
       description: document.getElementById("description").value,
+      version: version
     };
+
+    // 如果是专业版，增加调整参数
+    if (version === "professional") {
+      formData.pro_adjustments = {
+        floor: parseFloat(document.getElementById("floor_adj").value) / 100,
+        area: parseFloat(document.getElementById("area_adj").value) / 100,
+        trans_type: parseFloat(document.getElementById("trans_type_adj").value) / 100,
+        decoration: parseFloat(document.getElementById("decoration_adj").value) / 100,
+        built_year: parseFloat(document.getElementById("built_year_adj").value) / 100,
+        trans_time: parseFloat(document.getElementById("trans_time_adj").value) / 100
+      };
+    }
 
     // 重置进度 UI
     const steps = ["process", "estimate", "predict"];
@@ -486,10 +667,19 @@ block extra_css %}
 
       // 填充数据
       if (result.total_price_range && result.total_price_range.length === 2) {
-        document.getElementById("totalPrice").textContent =
-          formatCurrency(result.total_price_range[0]) +
-          " - " +
-          formatCurrency(result.total_price_range[1]);
+        if (
+          Math.abs(result.total_price_range[0] - result.total_price_range[1]) <
+          0.01
+        ) {
+          document.getElementById("totalPrice").textContent = formatCurrency(
+            result.total_price_range[0],
+          );
+        } else {
+          document.getElementById("totalPrice").textContent =
+            formatCurrency(result.total_price_range[0]) +
+            " - " +
+            formatCurrency(result.total_price_range[1]);
+        }
       } else {
         document.getElementById("totalPrice").textContent = formatCurrency(
           result.total_price,
@@ -497,11 +687,16 @@ block extra_css %}
       }
 
       if (result.price_range && result.price_range.length === 2) {
-        document.getElementById("unitPrice").textContent =
-          formatCurrency(result.price_range[0]) +
-          " - " +
-          formatCurrency(result.price_range[1]) +
-          " 元/平方米";
+        if (Math.abs(result.price_range[0] - result.price_range[1]) < 0.01) {
+          document.getElementById("unitPrice").textContent =
+            formatCurrency(result.price_range[0]) + " 元/平方米";
+        } else {
+          document.getElementById("unitPrice").textContent =
+            formatCurrency(result.price_range[0]) +
+            " - " +
+            formatCurrency(result.price_range[1]) +
+            " 元/平方米";
+        }
       } else {
         document.getElementById("unitPrice").textContent =
           formatCurrency(result.estimated_price) + " 元/平方米";
@@ -552,6 +747,18 @@ block extra_css %}
       document.getElementById("photoPreview"),
       document.getElementById("propertyPhotoPath"),
     );
+
+    // 专业版/普通版 切换逻辑
+    const proSection = document.getElementById("proAdjustmentSection");
+    document.getElementsByName("versionType").forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        if (e.target.value === "professional") {
+          proSection.style.display = "block";
+        } else {
+          proSection.style.display = "none";
+        }
+      });
+    });
 
     // 提交按钮点击事件
     document.getElementById("submitBtn").addEventListener("click", function () {

@@ -94,13 +94,14 @@ class PropertyValuationSystem:
         
         return enhanced_result
     
-    def estimate_property_value(self, target_property, comparable_cases=None):
+    def estimate_property_value(self, target_property, comparable_cases=None, pro_adjustments=None):
         """
         估算房产价值
         
         Args:
             target_property: 目标房产数据
             comparable_cases: 可比案例数据（可选）
+            pro_adjustments: 专业调整参数 (可选)
             
         Returns:
             dict: 估值结果
@@ -119,7 +120,7 @@ class PropertyValuationSystem:
                     'built_time': '2015-01-01',
                     'transaction_time': '2023-01-01',
                     'green_rate': 0.3,
-                    'address': '示例小区A',
+                    'address': '示例小区B',
                     'transaction_type': 1
                 },
                 {
@@ -147,11 +148,14 @@ class PropertyValuationSystem:
             ]
         
         # 使用IMCA估算房产价值
-        estimation_result = self.imca.estimate(target_property, comparable_cases)
+        estimation_result = self.imca.estimate(target_property, comparable_cases, pro_adjustments=pro_adjustments)
         
         # 生成估值解释
         explanation = self.imca.generate_explanation(estimation_result, target_property, comparable_cases)
         estimation_result['explanation'] = explanation
+        
+        if pro_adjustments:
+            estimation_result['explanation'] += "\n\n【专业调整已应用】\n根据手动设置的专业调整参数对相似度计算及修正系数进行了微调。"
         
         return estimation_result
     

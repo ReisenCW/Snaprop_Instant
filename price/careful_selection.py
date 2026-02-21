@@ -145,15 +145,13 @@ class careful_selection:
                 # 1. 地址条件
                 if strategy['loc_strict']:
                     if base_loc:
+                        # 精确模式：必须包含小区名
                         conditions.append(f"house_loc LIKE '%%{base_loc}%%'")
                     else:
                         conditions.append("1=1")
                 else:
-                    # 宽松模式：如果找不到同小区，尝试放宽地址条件
-                    if base_loc:
-                        conditions.append(f"")
-                    else:
-                        conditions.append("1=1")
+                    # 宽松模式：如果不强求小区匹配，完全忽略地址，让其他条件生效
+                    conditions.append("1=1")
                 
                 # 2. 房龄条件
                 conditions.append(f"ABS(CAST(house_year AS SIGNED) - {self.house_year}) <= {strategy['year_diff']}")

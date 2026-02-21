@@ -45,16 +45,31 @@ valuation_system = PropertyValuationSystem()
 def extract_trend_factor(prediction_text):
     """
     从预测文本中提取趋势因子
-    例如: "预计上涨 5%" -> (0.05, 0.05)
-          "预计下跌 2.5%" -> (-0.025, -0.025)
-          "预计上涨 3%-5%" -> (0.03, 0.05)
-          "预计下跌 1%-2%" -> (-0.02, -0.01)
-    返回: (min_factor, max_factor)
+    返回: (min_factor, max_factor, is_segmented, segmented_info)
     """
     if not prediction_text:
-        return 0.0, 0.0
+        return 0.0, 0.0, False, None
     
-    # 匹配范围模式，如 "3%-5%" 或 "3-5%"
+    # 检查分段趋势，如 "先上升 1% ... 后下降 2%"
+    segmented_pattern = r'先.*?(上升|上涨|增长).*?(\d+(?:\.\d+)?)(?:%|％).*?后.*?(下降|下跌|诚少).*?(\d+(?:\.\d+)?)(?:%|％)'
+    seg_match = re.search(segmented_pattern, prediction_text)
+    if seg_match:
+        rise_val = float(seg_match.group(2)) / 100.0
+        fall_val = -float(seg_match.group(4)) / 100.0
+        # 整体趋势取两者之和（近似）
+        net_trend = rise_val + fall_val
+        return net_trend, net_trend, True, (rise_val, abs(fall_val))
+
+    # 反向分段也可检查 "先下降 ... 后上升"
+    segmented_pattern_rev = r'先.*?(下降|下跌|减少).*?(\d+(?:\.\d+)?)(?:%|％).*?后.*?(上升|上涨|增长).*?(\d+(?:\.\d+)?)(?:%|％)'
+    seg_match_rev = re.search(segmented_pattern_rev, prediction_text)
+    if seg_match_rev:
+        fall_val = -float(seg_match_rev.group(2)) / 100.0
+        rise_val = float(seg_match_rev.group(4)) / 100.0
+        net_trend = fall_val + rise_val
+        return net_trend, net_trend, True, (abs(fall_val), rise_val, "下降/上升")
+
+    # 匹配范围模式 ... (existing logic)
     range_pattern = r'(\d+(?:\.\d+)?)(?:%|％)?\s*[-~至]\s*(\d+(?:\.\d+)?)(?:%|％)'
     
     # 匹配 "上涨" 或 "增长" 后跟范围
@@ -62,32 +77,27 @@ def extract_trend_factor(prediction_text):
     if rise_range_match:
         min_val = float(rise_range_match.group(1)) / 100.0
         max_val = float(rise_range_match.group(2)) / 100.0
-        return min_val, max_val
+        return min_val, max_val, False, None
 
     # 匹配 "下跌" 或 "下降" 后跟范围
     fall_range_match = re.search(r'(?:下跌|下降|减少).*?' + range_pattern, prediction_text)
     if fall_range_match:
-        # 注意：下跌时，数字大的代表跌幅大，即数值更小
-        # 例如下跌 1%-2%，对应因子是 -0.01 和 -0.02
-        # 范围应该是 [-0.02, -0.01]
         val1 = -float(fall_range_match.group(1)) / 100.0
         val2 = -float(fall_range_match.group(2)) / 100.0
-        return min(val1, val2), max(val1, val2)
+        return min(val1, val2), max(val1, val2), False, None
 
     # 如果没有匹配到范围，尝试匹配单个数值
-    # 匹配 "上涨" 或 "增长" 后跟数字
     rise_match = re.search(r'(?:上涨|增长|上升).*?(\d+(?:\.\d+)?)%', prediction_text)
     if rise_match:
         val = float(rise_match.group(1)) / 100.0
-        return val, val
+        return val, val, False, None
         
-    # 匹配 "下跌" 或 "下降" 后跟数字
     fall_match = re.search(r'(?:下跌|下降|减少).*?(\d+(?:\.\d+)?)%', prediction_text)
     if fall_match:
         val = -float(fall_match.group(1)) / 100.0
-        return val, val
+        return val, val, False, None
         
-    return 0.0, 0.0
+    return 0.0, 0.0, False, None
 
 def allowed_file(filename):
     """检查文件是否允许上传"""
@@ -160,17 +170,39 @@ def api_valuation():
                 processed_data = valuation_system.process_property_data(property_data)
                 yield json.dumps({"status": "progress", "stage": "process", "message": "已完成房产数据及地图处理", "done": True}) + "\n"
                 
+                # 获取绿化率
+                green_val = 0.3
+                if data.get('greening') is not None:
+                    try:
+                        green_val = float(data.get('greening')) / 100.0
+                    except:
+                        pass
+                else:
+                    # 尝试从处理过的数据中获取
+                    raw_green = processed_data.get("enhanced_data", {}).get("property_info", {}).get("green_rate", "0.3")
+                    try:
+                        if isinstance(raw_green, str):
+                            if '%' in raw_green:
+                                green_val = float(raw_green.replace('%', '')) / 100.0
+                            else:
+                                green_val = float(raw_green)
+                        else:
+                            green_val = float(raw_green)
+                    except:
+                        green_val = 0.3
+
                 # 准备目标房产数据
                 target_property = {
                     "size": float(data.get('area', 90)),
                     "floor": data.get('floor', '中楼层'),
                     "fitment": data.get('fitment', '简装'),
-                    "built_time": f"{data.get('year', 2015)}",
+                    "structure": data.get('structure', '平层'),
+                    "built_time": f"{data.get('year', 2015)}-01-01",
                     "room": int(data.get('room', 2)),
                     "hall": int(data.get('hall', 1)),
                     "kitchen": int(data.get('kitchen', 1)),
                     "bathroom": int(data.get('bathroom', 1)),
-                    "green_rate": processed_data.get("enhanced_data", {}).get("property_info", {}).get("green_rate", 0.3),
+                    "green_rate": green_val,
                     "transaction_type": 1
                 }
                 
@@ -210,14 +242,32 @@ def api_valuation():
                     if df:
                         comparable_cases = []
                         for i in df[:]:
+                            # 处理绿化率字符串
+                            raw_green = i.get('green_rate', '0.3')
+                            try:
+                                if isinstance(raw_green, str):
+                                    if '%' in raw_green:
+                                        green_val = float(raw_green.replace('%', '')) / 100.0
+                                    else:
+                                        green_val = float(raw_green)
+                                else:
+                                    green_val = float(raw_green)
+                            except:
+                                green_val = 0.3
+                                
+                            # 处理房龄
+                            house_year = i.get('house_year')
+                            built_time_str = f"{house_year}-01-01" if house_year else "2015-01-01"
+
                             case = {
                                 'price': float(i["u_price"]),
                                 'size': float(i['house_area']),
                                 'floor': i['house_floor'],
                                 'fitment': i['house_decoration'],
-                                'built_time': f"{i['house_year']}",
+                                'structure': i.get('house_structure', '平层'),
+                                'built_time': built_time_str,
                                 'transaction_time': str(i['transaction_time']),
-                                'green_rate': i.get('green_rate', 0.3),
+                                'green_rate': green_val,
                                 'address': i['house_loc'],
                                 'transaction_type': 1
                             }
@@ -228,12 +278,11 @@ def api_valuation():
                     if mysql_manager:
                         mysql_manager.close()
                 
-                # 开始估价计算
-                estimation_result = valuation_system.estimate_property_value(target_property, comparable_cases)
-                yield json.dumps({"status": "progress", "stage": "estimate", "message": "已完成房产价值估算分析", "done": True}) + "\n"
+                # 提取专业调整参数
+                pro_adjustments = data.get('pro_adjustments')
                 
-                # 3. 预测房价趋势微调
-                yield json.dumps({"status": "progress", "stage": "predict", "message": "正在预测房价趋势并微调结果..."}) + "\n"
+                # 开始估价计算
+                estimation_result = valuation_system.estimate_property_value(target_property, comparable_cases, pro_adjustments=pro_adjustments)
                 trend_factor = 0.0
                 min_trend = 0.0
                 max_trend = 0.0
@@ -251,7 +300,7 @@ def api_valuation():
                     prediction = predict_region(query, max_retries=3, enable_evolution=False, debug=True)
                     
                     if prediction:
-                        min_trend, max_trend = extract_trend_factor(prediction)
+                        min_trend, max_trend, is_segmented, seg_info = extract_trend_factor(prediction)
                         trend_factor = (min_trend + max_trend) / 2.0
                 except Exception as e:
                     print(f"房价预测失败: {str(e)}")
@@ -267,11 +316,30 @@ def api_valuation():
                     estimation_result['price_range'] = [min_adjusted_price, max_adjusted_price]
                     
                     if trend_factor != 0:
-                        trend_desc = "上涨" if trend_factor > 0 else "下跌"
-                        abs_min = abs(min_trend)
-                        abs_max = abs(max_trend)
-                        trend_str = f"{min(abs_min, abs_max):.2%} ~ {max(abs_min, abs_max):.2%}"
-                        estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {time_range} 的房价趋势预测，\n市场预期{trend_desc} {trend_str}。\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{min_adjusted_price:.2f} - {max_adjusted_price:.2f} 元/平"
+                        if is_segmented and seg_info:
+                            # 处理分段趋势样式: 上升/下降|a-b|
+                            if len(seg_info) == 2:
+                                trend_desc = "上升/下降"
+                                trend_str = f"|{seg_info[0]:.1%} - {seg_info[1]:.1%}|"
+                            else:
+                                # 下降/上升 情景
+                                trend_desc = seg_info[2]
+                                trend_str = f"|{seg_info[0]:.1%} - {seg_info[1]:.1%}|"
+                        else:
+                            trend_desc = "上涨" if trend_factor > 0 else "下跌"
+                            abs_min = abs(min_trend)
+                            abs_max = abs(max_trend)
+                            if abs_min == abs_max:
+                                trend_str = f"{abs_min:.2%}"
+                            else:
+                                trend_str = f"{min(abs_min, abs_max):.2%} ~ {max(abs_min, abs_max):.2%}"
+                        
+                        # 处理单价范围显示，若相同则只显示一个值
+                        adj_price_str = f"{min_adjusted_price:.2f} - {max_adjusted_price:.2f}"
+                        if abs(min_adjusted_price - max_adjusted_price) < 0.01:
+                            adj_price_str = f"{min_adjusted_price:.2f}"
+
+                        estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {time_range} 的房价趋势预测，\n市场预期{trend_desc} {trend_str}。\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{adj_price_str} 元/平"
 
                 yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成趋势预测与价值微调", "done": True}) + "\n"
 

@@ -46,7 +46,19 @@ class IMCA:
             'area_tolerance': 10,    # 面积容忍度（平方米）
             'floor_importance': 0.5, # 楼层重要性
             'decoration_importance': 0.7, # 装修重要性
+            'structure_importance': 0.6, # 结构重要性
             'age_importance': 0.6    # 房龄重要性
+        }
+
+        # 默认修正系数参数
+        self.adjustment_params = {
+            'time_factor': 0.08,      # 时间修正因子（每年）
+            'area_factor': 0.02,      # 面积修正因子（每10平米）
+            'floor_factor': 0.02,     # 楼层修正因子（每层）
+            'decoration_factor': 0.1,  # 装修修正因子（每级）
+            'age_factor': 0.01,       # 房龄修正因子（每年）
+            'green_rate_factor': 0.4, # 绿化率修正因子
+            'transaction_type_factor': 0.7 # 交易类型修正因子（不同时）
         }
     
     def preprocess_data(self, target_property, comparable_cases):
@@ -177,7 +189,17 @@ class IMCA:
             diff = abs(target_fitment - case_fitment)
             decoration_similarity = max(0.3, 1.0 - diff * 0.3)
         
-        # 3.4 房龄相似度
+        # 3.4 结构相似度
+        structure_similarity = 0.5  # 默认
+        if 'structure' in target and 'structure' in case:
+            if target['structure'] == case['structure']:
+                structure_similarity = 1.0
+            elif '暂无数据' in case['structure'] or '暂无数据' in target['structure']:
+                structure_similarity = 0.5
+            else:
+                structure_similarity = 0.3
+        
+        # 3.5 房龄相似度
         age_similarity = 1.0
         if 'age' in target and 'age' in case:
             age_diff = abs(target['age'] - case['age'])
@@ -188,8 +210,9 @@ class IMCA:
             area_similarity + 
             self.similarity_params['floor_importance'] * floor_similarity + 
             self.similarity_params['decoration_importance'] * decoration_similarity + 
+            self.similarity_params['structure_importance'] * structure_similarity +
             self.similarity_params['age_importance'] * age_similarity
-        ) / (1 + self.similarity_params['floor_importance'] + self.similarity_params['decoration_importance'] + self.similarity_params['age_importance'])
+        ) / (1 + self.similarity_params['floor_importance'] + self.similarity_params['decoration_importance'] + self.similarity_params['structure_importance'] + self.similarity_params['age_importance'])
         
         similarities['physical'] = physical_similarity
         
@@ -289,16 +312,16 @@ class IMCA:
             # 1. 时间修正
             time_adjustment = 1.0
             if 'time_diff' in case:
-                # 假设每年房价上涨8%
-                time_adjustment = 1.0 + 0.08 * case['time_diff']
+                # 默认每年房价上涨8%，受专业权重参数影响
+                time_adjustment = 1.0 + self.adjustment_params['time_factor'] * case['time_diff']
             adjustments['time'] = time_adjustment
             
             # 2. 面积修正
             area_adjustment = 1.0
             if 'size' in target and 'size' in case:
-                # 面积越大，单价越低，假设每增加10平方米，单价下降2%
+                # 面积越大，单价越低，默认每增加10平方米，单价下降2%
                 area_diff = target['size'] - case['size']
-                area_adjustment = 1.0 - 0.02 * (area_diff / 10)
+                area_adjustment = 1.0 - self.adjustment_params['area_factor'] * (area_diff / 10)
             adjustments['area'] = area_adjustment
             
             # 3. 楼层修正
@@ -314,8 +337,8 @@ class IMCA:
                     case_floor = case['floor']
                 
                 floor_diff = target_floor - case_floor
-                # 每层差异修正2%
-                floor_adjustment = 1.0 + 0.02 * floor_diff
+                # 默认每层差异修正2%
+                floor_adjustment = 1.0 + self.adjustment_params['floor_factor'] * floor_diff
             adjustments['floor'] = floor_adjustment
             
             # 4. 装修修正
@@ -331,8 +354,8 @@ class IMCA:
                     case_fitment = case['fitment']
                 
                 fitment_diff = target_fitment - case_fitment
-                # 每级装修差异修正10%
-                decoration_adjustment = 1.0 + 0.1 * fitment_diff
+                # 默认每级装修差异修正10%
+                decoration_adjustment = 1.0 + self.adjustment_params['decoration_factor'] * fitment_diff
             adjustments['decoration'] = decoration_adjustment
             
             # 5. 房龄修正
@@ -340,8 +363,8 @@ class IMCA:
             if 'age' in target and 'age' in case:
                 # 房龄差异修正
                 age_diff = target['age'] - case['age']
-                # 每年房龄差异修正1%
-                age_adjustment = 1.0 - 0.01 * age_diff
+                # 默认每年房龄差异修正1%
+                age_adjustment = 1.0 - self.adjustment_params['age_factor'] * age_diff
             adjustments['age'] = age_adjustment
             
             # 6. 绿化率修正
@@ -349,9 +372,17 @@ class IMCA:
             if 'green_rate' in target and 'green_rate' in case:
                 # 绿化率差异修正
                 green_rate_diff = target['green_rate'] - case['green_rate']
-                # 每10%绿化率差异修正4%
-                green_rate_adjustment = 1.0 + 0.4 * green_rate_diff
+                # 默认每10%绿化率差异修正4%
+                green_rate_adjustment = 1.0 + self.adjustment_params['green_rate_factor'] * green_rate_diff
             adjustments['green_rate'] = green_rate_adjustment
+
+            # 7. 交易类型修正
+            transaction_adjustment = 1.0
+            if 'transaction_type' in target and 'transaction_type' in case:
+                if target['transaction_type'] != case['transaction_type']:
+                    # 不同交易类型修正，默认30%折让 (0.7系数)
+                    transaction_adjustment = self.adjustment_params['transaction_type_factor']
+            adjustments['transaction'] = transaction_adjustment
             
             # 计算总修正系数
             total_adjustment = np.prod(list(adjustments.values()))
@@ -379,17 +410,58 @@ class IMCA:
         
         return weights
     
-    def estimate(self, target_property, comparable_cases):
+    def estimate(self, target_property, comparable_cases, pro_adjustments=None):
         """
         估算房产价值
         
         Args:
             target_property: 目标房产
             comparable_cases: 可比案例列表
+            pro_adjustments: 专业调整参数 (可选)
             
         Returns:
             dict: 估值结果
         """
+        # 如果提供了专业调整参数，应用它们
+        if pro_adjustments:
+            # 1. 楼层 (输入5代表每层楼差调整5%)
+            if 'floor' in pro_adjustments:
+                factor = pro_adjustments['floor']
+                # 调整相似度重要性：原系数0.02对应重要性0.5，按比例缩放
+                self.similarity_params['floor_importance'] = 0.5 * (factor / 0.02)
+                self.adjustment_params['floor_factor'] = factor
+                
+            # 2. 面积段 (输入2代表每10平米差调整2%)
+            if 'area' in pro_adjustments:
+                factor = pro_adjustments['area']
+                # 面积容忍度与单位修正幅度成反比 (幅度大意味着更敏感，容忍度低)
+                self.similarity_params['area_tolerance'] = 10 * (0.02 / (factor if factor > 0 else 0.02))
+                self.adjustment_params['area_factor'] = factor
+                
+            # 3. 装修情况 (输入10代表每级装修差调整10%)
+            if 'decoration' in pro_adjustments:
+                factor = pro_adjustments['decoration']
+                self.similarity_params['decoration_importance'] = 0.7 * (factor / 0.1)
+                self.adjustment_params['decoration_factor'] = factor
+                
+            # 4. 建成年份 (输入1代表每年房龄差调整1%)
+            if 'built_year' in pro_adjustments:
+                factor = pro_adjustments['built_year']
+                self.similarity_params['age_importance'] = 0.6 * (factor / 0.01)
+                self.adjustment_params['age_factor'] = factor
+                
+            # 5. 交易时间 (输入8代表每年市场增值8%)
+            if 'trans_time' in pro_adjustments:
+                factor = pro_adjustments['trans_time']
+                # 交易时间衰减率也按比例调整
+                self.similarity_params['time_decay_rate'] = 0.1 * (factor / 0.08)
+                self.adjustment_params['time_factor'] = factor
+                
+            # 6. 交易类型 (输入30代表非市场交易扣减30%)
+            if 'trans_type' in pro_adjustments:
+                factor = pro_adjustments['trans_type']
+                self.adjustment_params['transaction_type_factor'] = 1.0 - factor
+
         # 预处理数据
         target, cases = self.preprocess_data(target_property, comparable_cases)
         
