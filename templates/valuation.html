@@ -492,7 +492,7 @@ block extra_css %}
           formatCurrency(result.total_price_range[1]);
       } else {
         document.getElementById("totalPrice").textContent = formatCurrency(
-          result.total_price
+          result.total_price,
         );
       }
 
@@ -544,13 +544,13 @@ block extra_css %}
     handleFileSelect(
       document.getElementById("certImage"),
       document.getElementById("certPreview"),
-      document.getElementById("certImagePath")
+      document.getElementById("certImagePath"),
     );
 
     handleFileSelect(
       document.getElementById("propertyPhoto"),
       document.getElementById("photoPreview"),
-      document.getElementById("propertyPhotoPath")
+      document.getElementById("propertyPhotoPath"),
     );
 
     // 提交按钮点击事件
