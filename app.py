@@ -7,7 +7,7 @@ import sys
 import json
 import re
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context, send_file
 from werkzeug.utils import secure_filename
 import pandas as pd
 from price.careful_selection import careful_selection
@@ -34,7 +34,7 @@ app = Flask(__name__)
 
 # 配置上传文件目录
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'xlsx', 'xls'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 限制上传文件大小为16MB
 
@@ -150,68 +150,199 @@ def upload_file():
     return jsonify({'success': False, 'error': '不允许的文件类型'})
 
 
+@app.route('/api/export_excel', methods=['POST'])
+def api_export_excel():
+    """将前端表格数据导出为 Excel"""
+    try:
+        data = request.get_json()
+        table_data = data.get('table_data', [])
+        if not table_data:
+            return jsonify({"success": False, "error": "表格数据为空"}), 400
+        
+        # 使用 pandas 创建 Excel
+        df = pd.DataFrame(table_data)
+        
+        # 写入内存字节流
+        import io
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, header=False)
+        output.seek(0)
+        
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=f"property_ocr_result_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/ocr_extract', methods=['POST'])
 def api_ocr_extract():
-    """提取房产证OCR数据"""
+    """提取房产证数据，支持图片OCR或Excel直接读取"""
     try:
         data = request.get_json()
         image_path = data.get('image_path')
         if not image_path:
-            return jsonify({"success": False, "error": "缺少图片路径"}), 400
+            return jsonify({"success": False, "error": "缺少图片或文件路径"}), 400
         
-        # 使用 OCR_Table 处理
-        ocr_processor = OCR_Table()
-        result_str = ocr_processor.trans_to_str(image_path)
+        # 安全地提取文件名
+        img_filename = os.path.basename(image_path)
+        file_ext = img_filename.rsplit('.', 1)[1].lower() if '.' in img_filename else ""
         
-        if not result_str:
-            return jsonify({"success": False, "error": "OCR 提取失败"}), 500
+        rows = []
+        content = ""
+        
+        # 1. 如果是 Excel 文件，直接读取
+        if file_ext in ['xlsx', 'xls']:
+            try:
+                # 转换路径为绝对路径以防读取失败
+                abs_path = os.path.abspath(image_path)
+                df_dict = pd.read_excel(abs_path, sheet_name=None, header=None)
+                
+                excel_texts = []
+                for sheet_name, df in df_dict.items():
+                    # 替换 NaN 为空字符串
+                    df = df.fillna("")
+                    sheet_rows = df.values.tolist()
+                    
+                    for r in sheet_rows:
+                        str_row = [str(x).strip() for x in r]
+                        if any(x != "" for x in str_row):
+                            rows.append(str_row)
+                            excel_texts.append(" ".join(str_row))
+                
+                # 合并所有文本用于后续正则匹配
+                content = "\n".join(excel_texts)
+            except Exception as e:
+                print(f"Excel 直接读取失败: {str(e)}")
+                return jsonify({"success": False, "error": f"Excel 读取失败: {str(e)}"}), 500
+        
+        # 2. 如果是图片，执行 OCR
+        else:
+            # 使用 OCR_Table 获取表格化数据
+            ocr_processor = OCR_Table()
             
-        result_json = json.loads(result_str)
-        content = result_json.get('body', {}).get('Data', {}).get('Content', '')
-        
-        # 简单提取 logic
+            # 保存 Excel 并解析原始表格数据
+            try:
+                xlsx_paths = ocr_processor.trans_to_xlsx(img_filename)
+                # 处理所有识别出的表格（针对摊开本子的多页情况）
+                for xlsx_path in xlsx_paths:
+                    raw_table_list = ocr_processor.trans_to_df(xlsx_path)
+                    if raw_table_list:
+                        for sheet_data in raw_table_list:
+                            # --- 智能列剪枝 (过滤全空列) ---
+                            if not sheet_data: 
+                                continue
+                            
+                            max_cols = 0
+                            for r in sheet_data: 
+                                if r: max_cols = max(max_cols, len(r))
+                            
+                            valid_col_indices = []
+                            for c in range(max_cols):
+                                is_empty = True
+                                for r in sheet_data:
+                                    if c < len(r) and r[c] is not None and str(r[c]).strip() != "" and str(r[c]).strip().lower() != "nan":
+                                        is_empty = False
+                                        break
+                                if not is_empty:
+                                    valid_col_indices.append(c)
+                            
+                            # 如果没有有效列，跳过
+                            if not valid_col_indices:
+                                continue
+                                
+                            # 过滤行并仅保留有效列
+                            for r in sheet_data:
+                                if any(x is not None and str(x).strip() != "" for x in r):
+                                    cleaned_row = []
+                                    for idx in valid_col_indices:
+                                        val = r[idx] if idx < len(r) else ""
+                                        val_str = str(val).strip() if val is not None else ""
+                                        if val_str.lower() == "nan": val_str = ""
+                                        cleaned_row.append(val_str)
+                                    rows.append(cleaned_row)
+                            
+                            # 在不同表格/页面之间加一个分割线
+                            if xlsx_path != xlsx_paths[-1]:
+                                rows.append(["---" for _ in range(len(valid_col_indices))])
+            except Exception as e:
+                print(f"表格提取/合并失败: {str(e)}")
+
+            # 使用 trans_to_str 获取文本内容，用于后备提取和辅助识别
+            result_str = ocr_processor.trans_to_str(image_path)
+            if result_str:
+                try:
+                    res_obj = json.loads(result_str)
+                    content = res_obj.get('body', {}).get('Data', {}).get('Content', '')
+                except: pass
+
+        # 3. 结构化数据提取 (建议值 - 统一使用 content)
         extracted_info = {
             "address": "",
+            "city": "",
             "area": 0.0,
             "room": 2,
             "hall": 1,
             "year": 2015
         }
         
-        # 提取地址: 房地坐落/坐落
-        addr_match = re.search(r'(?:房地坐落|坐落)\s*[:：\s]*([^\n\r，。;；]*)', content)
-        if addr_match:
-            extracted_info["address"] = addr_match.group(1).strip()
+        if content:
+            # 提取地址
+            addr_match = re.search(r'(?:房地坐落|坐落)\s*[:：\s]*([^\n\r，。;；]*)', content)
+            if addr_match:
+                found_addr = addr_match.group(1).strip()
+                extracted_info["address"] = found_addr
+                
+                # 城市自动识别 (上海/沪 优先)
+                if "上海" in found_addr or "沪" in found_addr:
+                    extracted_info["city"] = "上海"
+                elif "北京" in found_addr:
+                    extracted_info["city"] = "北京"
+                elif "广州" in found_addr:
+                    extracted_info["city"] = "广州"
+                elif "深圳" in found_addr:
+                    extracted_info["city"] = "深圳"
+                # ... 其他城市可续
             
-        # 提取建筑面积, 注意可能含小数点
-        area_match = re.search(r'建筑面积\s*[:：\s]*(\d+(\.\d+)?)\s*(?:平方米|㎡|平米|平)?', content)
-        if not area_match:
-            area_match = re.search(r'(\d+(\.\d+)?)\s*(?:平方米|㎡|平米|平)', content)
-        if area_match:
-            try:
-                extracted_info["area"] = float(area_match.group(1))
-            except:
-                pass
-            
-        # 户型提取 (如: 2室1厅, 3房2厅)
-        room_match = re.search(r'(\d+)\s*(?:室|房)', content)
-        if room_match:
-            extracted_info["room"] = int(room_match.group(1))
-        
-        hall_match = re.search(r'(\d+)\s*(?:厅)', content)
-        if hall_match:
-            extracted_info["hall"] = int(hall_match.group(1))
-            
-        # 年份提取, 查找 20XX年 或 19XX年
-        year_match = re.search(r'((?:20|19)\d{2})\s*年', content)
-        if not year_match:
-             year_match = re.search(r'((?:20|19)\d{2})[-\/]\d{2}[-\/]\d{2}', content)
-        if year_match:
-            extracted_info["year"] = int(year_match.group(1))
+            # 提取面积
+            area_match = re.search(r'建筑面积\s*[:：\s]*(\d+(\.\d+)?)\s*(?:平方米|㎡|平米|平)?', content)
+            if not area_match:
+                area_match = re.search(r'(\d+(\.\d+)?)\s*(?:平方米|㎡|平米|平)', content)
+            if area_match:
+                try:
+                    extracted_info["area"] = float(area_match.group(1))
+                except: pass
+                
+            # 提取户型，特别反混淆
+            # 先找 几室几厅
+            type_match = re.search(r'(\d{1,2})\s*(?:室|房)\s*(\d{1,2})\s*厅', content)
+            if type_match:
+                extracted_info["room"] = int(type_match.group(1))
+                extracted_info["hall"] = int(type_match.group(2))
+            else:
+                # 寻找室：排除门牌号（302室等通常三位及以上，或者前面有号/幢）
+                # 寻找典型的户型描述：[1-9]室
+                room_match = re.search(r'(?:[^0-9]|^)([1-9])\s*(?:室|房)', content)
+                if room_match:
+                    extracted_info["room"] = int(room_match.group(1))
+                
+                hall_match = re.search(r'([0-9])\s*厅', content)
+                if hall_match:
+                    extracted_info["hall"] = int(hall_match.group(1))
+                
+            # 年份提取
+            year_match = re.search(r'((?:20|19)\d{2})\s*年', content)
+            if year_match:
+                extracted_info["year"] = int(year_match.group(1))
 
         return jsonify({
             "success": True,
-            "data": extracted_info
+            "table_data": rows,
+            "extracted_data": extracted_info
         })
     except Exception as e:
         print(f"OCR分析详细错误: {str(e)}")

@@ -1,5 +1,6 @@
 import datetime
 import io
+import json
 import os
 import sys
 import time
@@ -73,26 +74,34 @@ class OCR_Table:
             print(error.data.get("Recommend"))
             UtilClient.assert_as_string(error.message)
 
-    def trans_to_url(self, img_path) -> str | None:
-        url = eval(self.trans_to_str(img_path))['body']["Data"]["SubImages"][0]["TableInfo"]["TableExcel"]  # important
-        return url
+    def trans_to_urls(self, img_path) -> list:
+        json_res = json.loads(self.trans_to_str(img_path))
+        urls = []
+        if "body" in json_res and "Data" in json_res["body"] and "SubImages" in json_res["body"]["Data"]:
+            for sub_img in json_res["body"]["Data"]["SubImages"]:
+                if "TableInfo" in sub_img and "TableExcel" in sub_img["TableInfo"]:
+                    urls.append(sub_img["TableInfo"]["TableExcel"])
+        return urls
 
-    def trans_to_path(self, img_path):
-        filename = f"{Path(img_path).stem}_OCR.xlsx"
+    def trans_to_path(self, img_path, index=0):
+        filename = f"{Path(img_path).stem}_{index}_OCR.xlsx"
         filepath = f"{OCR_PATH}/{filename}"
         return filepath
 
     def trans_to_xlsx(self, img_name):
         img_path = f"{UPLOAD_FOLDER}/{img_name}"
-        print(img_path)
-        url = self.trans_to_url(img_path)
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        save_path = self.trans_to_path(img_name)
-        with open(save_path, 'wb') as f:
-            f.write(response.content)
+        urls = self.trans_to_urls(img_path)
+        
+        save_paths = []
+        for i, url in enumerate(urls):
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            save_path = self.trans_to_path(img_name, i)
+            with open(save_path, 'wb') as f:
+                f.write(response.content)
+            save_paths.append(save_path)
 
-        return save_path
+        return save_paths
 
     # def trans_to_dict(self, save_path) -> dict:
     #     wb = openpyxl.load_workbook(save_path)
