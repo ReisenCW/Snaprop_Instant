@@ -1,10 +1,29 @@
 {% extends "base.html" %} {% block title %}房产估值 - 房估宝{% endblock %} {%
-block extra_css %}
-<style>
+block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet"><style>
   .upload-preview {
     max-width: 100%;
     max-height: 200px;
     margin-top: 10px;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .upload-preview:hover {
+    transform: scale(1.02);
+  }
+  #imageViewerModal .modal-body {
+    text-align: center;
+    padding: 0;
+  }
+  #imageViewerModal .modal-body img {
+    max-width: 100%;
+    height: auto;
+  }
+  /* 确保模态框在最上层，避免被背景遮挡 */
+  .modal {
+    z-index: 1060 !important;
+  }
+  .modal-backdrop {
+    z-index: 1050 !important;
   }
   .result-card {
     display: none;
@@ -82,31 +101,107 @@ block extra_css %}
 <div class="row">
   <!-- 左边：拍照上传 -->
   <div class="col-lg-6">
+    <!-- 房产证照片卡片 -->
     <div class="card shadow-sm mb-4">
       <div class="card-header bg-primary text-white">
-        <h5 class="card-title mb-0">拍照上传/描述</h5>
+        <h5 class="card-title mb-0"><i class="bi bi-file-earmark-text me-2"></i>房产证照片上传</h5>
       </div>
       <div class="card-body">
         <div class="mb-3">
-          <label for="certImage" class="form-label">房产证照片</label>
+          <label for="certImage" class="form-label">上传房产证（支持图片）</label>
           <input
             type="file"
             class="form-control"
             id="certImage"
             accept="image/*"
           />
-          <img id="certPreview" class="upload-preview" style="display: none" />
+          <div class="text-center mt-2">
+            <img id="certPreview" class="upload-preview img-thumbnail" style="display: none; max-height: 200px;" />
+          </div>
           <input type="hidden" id="certImagePath" name="certImagePath" />
         </div>
+
+        <!-- OCR 提取数据确认表 -->
+        <div id="ocrDataTableSection" style="display: none;" class="mt-3 border rounded p-3 bg-light">
+          <h6 class="mb-3 border-bottom pb-2">识别结果 (请核对并修正)</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+              <thead class="table-secondary">
+                <tr>
+                  <th style="width: 30%">字段</th>
+                  <th>识别值</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>房产地址</td>
+                  <td><input type="text" class="form-control form-control-sm border-0 bg-transparent" id="ocr_address"></td>
+                </tr>
+                <tr>
+                  <td>建筑面积</td>
+                  <td>
+                    <div class="input-group input-group-sm border-0">
+                      <input type="number" step="0.01" class="form-control border-0 bg-transparent" id="ocr_area">
+                      <span class="input-group-text border-0 bg-transparent">㎡</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td>户型 (室)</td>
+                  <td><input type="number" class="form-control form-control-sm border-0 bg-transparent" id="ocr_room"></td>
+                </tr>
+                <tr>
+                  <td>户型 (厅)</td>
+                  <td><input type="number" class="form-control form-control-sm border-0 bg-transparent" id="ocr_hall"></td>
+                </tr>
+                <tr>
+                  <td>建成年份</td>
+                  <td><input type="number" class="form-control form-control-sm border-0 bg-transparent" id="ocr_year"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="mt-3 text-end">
+            <button type="button" id="confirmOcrBtn" class="btn btn-sm btn-success">确认并自动填充表单</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 房屋外观照片卡片 -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-primary text-white">
+        <h5 class="card-title mb-0"><i class="bi bi-house me-2"></i>房屋外观/详情</h5>
+      </div>
+      <div class="card-body">
         <div class="mb-3">
-          <label for="propertyPhoto" class="form-label">房屋外观照片</label>
+          <label for="propertyPhoto" class="form-label">上传外观照片</label>
           <input
             type="file"
             class="form-control"
             id="propertyPhoto"
             accept="image/*"
           />
-          <img id="photoPreview" class="upload-preview" style="display: none" />
+          <div class="text-center mt-2">
+            <img id="photoPreview" class="upload-preview img-thumbnail" style="display: none; max-height: 200px;" />
+          </div>
+          <div id="decorationStatusLabel" class="mt-2 text-primary fw-bold" style="display: none;">
+            CLIP 识别装修情况: <span id="decorationResult">分析中...</span>
+          </div>
+          <div id="decorationManualSelect" class="mt-2" style="display: none;">
+            <div class="row align-items-center">
+              <div class="col-8">
+                <select id="manualDecoration" class="form-select form-select-sm">
+                  <option value="毛坯">毛坯</option>
+                  <option value="简装">简装</option>
+                  <option value="精装">精装</option>
+                </select>
+              </div>
+              <div class="col-4">
+                <button type="button" id="syncDecorationBtn" class="btn btn-sm btn-success">确认同步</button>
+              </div>
+            </div>
+          </div>
           <input
             type="hidden"
             id="propertyPhotoPath"
@@ -483,9 +578,68 @@ block extra_css %}
 <!-- 隐藏区域：供脚本重置使用以避免报错 -->
 <div id="predictionSection" style="display: none"></div>
 <div id="noPredictionMsg" style="display: none"></div>
-{% endblock %} {% block extra_js %}
+{% endblock %}
+
+{% block modals %}
+<!-- 图片放大模态框 -->
+<div class="modal fade" id="imageViewerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0 text-center">
+        <img id="enlargedImage" src="" class="img-fluid" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 图片裁剪模态框 -->
+<div class="modal fade" id="cropModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-crop me-2"></i>裁剪并上传图片</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="img-container mb-3" style="max-height: 500px; width: 100%; overflow: hidden; background-color: #f8f9fa;">
+          <img id="cropTarget" src="" style="display: block; max-width: 100%;" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" id="confirmCropBtn" class="btn btn-primary">裁剪并上传</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 <script>
-  // 文件上传预览
+  let currentCropper = null;
+  let currentFileContext = null; // { file, fileType, hiddenInput, previewElement }
+
+  // 图片放大查看逻辑
+  function initImageViewer() {
+    const viewerModalEl = document.getElementById('imageViewerModal');
+    const enlargedImg = document.getElementById('enlargedImage');
+    
+    document.querySelectorAll('.upload-preview').forEach(img => {
+      img.addEventListener('click', function() {
+        if (this.src) {
+          enlargedImg.src = this.src;
+          const viewerModal = bootstrap.Modal.getOrCreateInstance(viewerModalEl);
+          viewerModal.show();
+        }
+      });
+    });
+  }
+
+  // 文件选择与裁剪逻辑
   function handleFileSelect(fileInput, previewElement, hiddenInput) {
     fileInput.addEventListener("change", function (e) {
       const file = e.target.files[0];
@@ -494,38 +648,168 @@ block extra_css %}
         return;
       }
 
-      // 显示预览
+      // 保存上下文
+      currentFileContext = { file, fileType: fileInput.id, hiddenInput, previewElement };
+
+      // 读取文件并打开裁剪对话框
       const reader = new FileReader();
       reader.onload = function (e) {
-        previewElement.src = e.target.result;
-        previewElement.style.display = "block";
+        const cropTarget = document.getElementById('cropTarget');
+        cropTarget.src = e.target.result;
+        
+        const cropModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('cropModal'));
+        cropModal.show();
       };
       reader.readAsDataURL(file);
-
-      // 上传文件
-      uploadFile(file, fileInput.id, hiddenInput);
     });
   }
 
-  // 文件上传
-  function uploadFile(file, fileType, hiddenInput) {
+  // 初始化裁剪模态框相关事件
+  function initCropEvents() {
+    const cropModalEl = document.getElementById('cropModal');
+    const cropTarget = document.getElementById('cropTarget');
+
+    cropModalEl.addEventListener('shown.bs.modal', function () {
+      if (currentCropper) {
+        currentCropper.destroy();
+      }
+      currentCropper = new Cropper(cropTarget, {
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 0.8,
+        restore: false,
+        guides: true,
+        center: true,
+        highlight: false,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+      });
+    });
+
+    cropModalEl.addEventListener('hidden.bs.modal', function () {
+      if (currentCropper) {
+        currentCropper.destroy();
+        currentCropper = null;
+      }
+      // 重置文件输入框的值，允许再次选择同一个文件
+      document.getElementById('certImage').value = '';
+      document.getElementById('propertyPhoto').value = '';
+    });
+
+    // 确认裁剪并上传
+    document.getElementById('confirmCropBtn').addEventListener('click', async function() {
+      if (!currentCropper || !currentFileContext) return;
+
+      const canvas = currentCropper.getCroppedCanvas({
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high',
+      });
+
+      canvas.toBlob(async (blob) => {
+        const croppedFile = new File([blob], currentFileContext.file.name, { type: 'image/jpeg' });
+        
+        // 更新预览图
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          currentFileContext.previewElement.src = e.target.result;
+          currentFileContext.previewElement.style.display = "block";
+        };
+        reader.readAsDataURL(croppedFile);
+
+        // 关闭模态框
+        bootstrap.Modal.getInstance(cropModalEl).hide();
+
+        // 执行异步上传和后端逻辑处理
+        await processFileUpload(croppedFile, currentFileContext.fileType, currentFileContext.hiddenInput);
+      }, 'image/jpeg', 0.92);
+    });
+  }
+
+  // 综合处理文件上传流程
+  async function processFileUpload(file, fileType, hiddenInput) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("type", fileType);
 
-    axios
-      .post("/api/upload", formData)
-      .then(function (response) {
-        if (response.data.success) {
-          hiddenInput.value = response.data.file_path;
+    try {
+      // 1. 发起文件上传
+      const uploadResp = await axios.post("/api/upload", formData);
+      if (!uploadResp.data.success) {
+        throw new Error(uploadResp.data.error || "上传失败");
+      }
+
+      const filePath = uploadResp.data.file_path;
+      hiddenInput.value = filePath;
+
+      // 2. 根据类型执行不同的 AI 任务
+      if (fileType === "certImage") {
+        // 房产证 OCR 任务
+        const ocrSection = document.getElementById("ocrDataTableSection");
+        ocrSection.style.display = "block";
+        // 重置按钮和文字
+        const confirmBtn = document.getElementById("confirmOcrBtn");
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = "正在提取 OCR 数据...";
+
+        const ocrResp = await axios.post("/api/ocr_extract", { image_path: filePath });
+        if (ocrResp.data.success) {
+          const data = ocrResp.data.data;
+          document.getElementById("ocr_address").value = data.address || "";
+          document.getElementById("ocr_area").value = data.area || 0;
+          document.getElementById("ocr_room").value = data.room || 2;
+          document.getElementById("ocr_hall").value = data.hall || 1;
+          document.getElementById("ocr_year").value = data.year || 2015;
+          
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = "确认并自动填充表单";
         } else {
-          alert("文件上传失败: " + response.data.error);
+          confirmBtn.textContent = "OCR 提取失败，请手动填写";
         }
-      })
-      .catch(function (error) {
-        console.error("上传错误:", error);
-        alert("文件上传出错，请重试");
-      });
+      } else if (fileType === "propertyPhoto") {
+        // 外观识别装修情况
+        const statusLabel = document.getElementById("decorationStatusLabel");
+        const statusResult = document.getElementById("decorationResult");
+        const manualSelect = document.getElementById("decorationManualSelect");
+        const manualDecoration = document.getElementById("manualDecoration");
+        
+        statusLabel.style.display = "block";
+        statusResult.textContent = "CLIP 正在分析装修情况...";
+        manualSelect.style.display = "none";
+
+        const decoResp = await axios.post("/api/recognize_decoration", { image_path: filePath });
+        if (decoResp.data.success) {
+          const deco = decoResp.data.decoration;
+          statusResult.textContent = deco;
+          
+          // 显示手动修改并设置默认值为识别出的值
+          manualSelect.style.display = "block";
+          manualDecoration.value = deco;
+
+          // 自动填充基本信息中的装修字段
+          document.getElementById("fitment").value = deco;
+          
+          // 添加同步按钮监听
+          document.getElementById("syncDecorationBtn").onclick = function() {
+            const chosen = manualDecoration.value;
+            document.getElementById("fitment").value = chosen;
+            statusResult.textContent = chosen + " (已同步)";
+            this.textContent = "✓ 已同步";
+            setTimeout(() => {
+                this.textContent = "同步至基本信息";
+            }, 2000);
+          };
+        } else {
+          statusResult.textContent = "识别失败";
+          manualSelect.style.display = "block"; // 识别失败也显示手动选择
+        }
+      }
+    } catch (error) {
+      console.error("文件流程错误:", error);
+      alert("处理文件时出错: " + error.message);
+    }
   }
 
   // 提交估值表单
@@ -735,7 +1019,13 @@ block extra_css %}
 
   // 页面加载完成后初始化
   document.addEventListener("DOMContentLoaded", function () {
-    // 初始化文件上传预览
+    // 初始化点击放大功能
+    initImageViewer();
+    
+    // 初始化裁剪模态框事件
+    initCropEvents();
+
+    // 初始化文件上传按钮监听 (触发裁剪流程)
     handleFileSelect(
       document.getElementById("certImage"),
       document.getElementById("certPreview"),
@@ -747,6 +1037,24 @@ block extra_css %}
       document.getElementById("photoPreview"),
       document.getElementById("propertyPhotoPath"),
     );
+
+    // 房产证 OCR 数据确认逻辑
+    document.getElementById("confirmOcrBtn").addEventListener("click", function() {
+      // 自动填充右侧表单中的对应字段
+      document.getElementById("address").value = document.getElementById("ocr_address").value;
+      document.getElementById("area").value = document.getElementById("ocr_area").value;
+      document.getElementById("room").value = document.getElementById("ocr_room").value;
+      document.getElementById("hall").value = document.getElementById("ocr_hall").value;
+      document.getElementById("year").value = document.getElementById("ocr_year").value;
+      
+      // 添加一个简单的 Toast/反馈
+      this.classList.remove("btn-success");
+      this.classList.add("btn-outline-success");
+      this.textContent = "✓ 已成功同步至表单";
+      
+      // 自动滚动到表单部分
+      document.getElementById("valuationForm").scrollIntoView({ behavior: "smooth" });
+    });
 
     // 专业版/普通版 切换逻辑
     const proSection = document.getElementById("proAdjustmentSection");

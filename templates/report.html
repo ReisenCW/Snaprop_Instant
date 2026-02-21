@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -6,9 +6,8 @@
     <title>估值报告详情 - 房估宝</title>
   </head>
   <body>
-    {% extends "base.html" %} 
-    {% block title %}估值报告详情 - 房估宝{% endblock %} 
-    {% block extra_css %}
+    {% extends "base.html" %} {% block title %}估值报告详情 - 房估宝{% endblock
+    %} {% block extra_css %}
     <style>
       .module-header {
         border-left: 5px solid #0d6efd;
@@ -35,9 +34,15 @@
         border-radius: 4px;
         background-color: #f1f3f5;
       }
+      .card-body img {
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .card-body img:hover {
+        transform: scale(1.01);
+      }
     </style>
-    {% endblock %}
-    {% block content %}
+    {% endblock %} {% block content %}
     <div class="row">
       <div class="col-lg-10 mx-auto">
         <h1 class="mb-4">估值报告详情</h1>
@@ -140,7 +145,10 @@
               {% if report.target_property.room is defined %}
               <div class="col-md-6">
                 <p>
-                  <strong>户型：</strong>{{ report.target_property.room }}室{{ report.target_property.hall }}厅{{ report.target_property.kitchen }}厨{{ report.target_property.bathroom }}卫
+                  <strong>户型：</strong>{{ report.target_property.room }}室{{
+                  report.target_property.hall }}厅{{
+                  report.target_property.kitchen }}厨{{
+                  report.target_property.bathroom }}卫
                 </p>
               </div>
               {% endif %}
@@ -153,41 +161,53 @@
             <h5 class="mb-0">估值详细分析</h5>
           </div>
           <div class="card-body">
-            {% set explanation = report.estimation_result.explanation %}
-            {% if "【市场趋势调整】" in explanation %}
-              {% set parts = explanation.split("【市场趋势调整】") %}
-              
-              <div class="valuation-module mb-5">
-                <div class="module-header bg-light border-start border-primary border-5 p-3 mb-4">
-                  <h4 class="module-title text-primary"><i class="bi bi-graph-up pe-2"></i>市场比较法分析</h4>
-                </div>
-                <div class="explanation-text px-3" style="white-space: pre-line">
-                  {{ parts[0].strip() }}
-                </div>
-              </div>
+            {% set explanation = report.estimation_result.explanation %} {% if
+            "【市场趋势调整】" in explanation %} {% set parts =
+            explanation.split("【市场趋势调整】") %}
 
-              <div class="valuation-module">
-                <div class="module-header bg-light border-start border-success border-5 p-3 mb-4">
-                  <h4 class="module-title text-success"><i class="bi bi-arrow-up-right-circle pe-2"></i>市场趋势调整</h4>
-                </div>
-                <div class="explanation-text px-3" style="white-space: pre-line">
-                  {{ parts[1].strip() }}
-                </div>
+            <div class="valuation-module mb-5">
+              <div
+                class="module-header bg-light border-start border-primary border-5 p-3 mb-4"
+              >
+                <h4 class="module-title text-primary">
+                  <i class="bi bi-graph-up pe-2"></i>市场比较法分析
+                </h4>
               </div>
+              <div class="explanation-text px-3" style="white-space: pre-line">
+                {{ parts[0].strip() }}
+              </div>
+            </div>
+
+            <div class="valuation-module">
+              <div
+                class="module-header bg-light border-start border-success border-5 p-3 mb-4"
+              >
+                <h4 class="module-title text-success">
+                  <i class="bi bi-arrow-up-right-circle pe-2"></i>市场趋势调整
+                </h4>
+              </div>
+              <div class="explanation-text px-3" style="white-space: pre-line">
+                {{ parts[1].strip() }}
+              </div>
+            </div>
             {% else %}
-              <div class="valuation-module">
-                <div class="module-header bg-light border-start border-primary border-5 p-3 mb-4">
-                  <h4 class="module-title text-primary"><i class="bi bi-graph-up pe-2"></i>市场比较法分析</h4>
-                </div>
-                <div class="explanation-text px-3" style="white-space: pre-line">
-                  {{ explanation.strip() }}
-                </div>
+            <div class="valuation-module">
+              <div
+                class="module-header bg-light border-start border-primary border-5 p-3 mb-4"
+              >
+                <h4 class="module-title text-primary">
+                  <i class="bi bi-graph-up pe-2"></i>市场比较法分析
+                </h4>
               </div>
+              <div class="explanation-text px-3" style="white-space: pre-line">
+                {{ explanation.strip() }}
+              </div>
+            </div>
             {% endif %}
           </div>
         </div>
 
-        <div class="text-center">
+        <div class="text-center mb-5">
           <a href="/reports" class="btn btn-secondary me-2">
             <i class="bi bi-arrow-left"></i> 返回列表
           </a>
@@ -195,8 +215,92 @@
             <i class="bi bi-printer"></i> 打印报告
           </button>
         </div>
+
+        <!-- 房产照片展示 (放在最后) -->
+        <h5 class="mt-5 mb-3 border-bottom pb-2">现场及凭据照片</h5>
+        <div class="row mb-4">
+          {% if report.property_data.property_photo %}
+          <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm">
+              <div class="card-header bg-light">
+                <h6 class="mb-0 text-primary">
+                  <i class="bi bi-house-door me-1"></i>房屋外观/详情
+                </h6>
+              </div>
+              <div class="card-body text-center p-2">
+                <img
+                  src="/{{ report.property_data.property_photo }}"
+                  class="img-fluid rounded"
+                  style="max-height: 400px; width: auto; object-fit: contain"
+                  alt="房屋外观"
+                />
+              </div>
+            </div>
+          </div>
+          {% endif %} {% if report.property_data.property_cert_image %}
+          <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm">
+              <div class="card-header bg-light">
+                <h6 class="mb-0 text-info">
+                  <i class="bi bi-file-earmark-image me-1"></i>房产证/证明材料
+                </h6>
+              </div>
+              <div class="card-body text-center p-2">
+                <img
+                  src="/{{ report.property_data.property_cert_image }}"
+                  class="img-fluid rounded"
+                  style="max-height: 400px; width: auto; object-fit: contain"
+                  alt="房产证"
+                />
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
       </div>
     </div>
+    {% endblock %} {% block modals %}
+    <!-- 图片放大查看模态框 -->
+    <div
+      class="modal fade"
+      id="imageViewerModal"
+      tabindex="-1"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+          <div class="modal-header border-0 pb-0">
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body p-0 text-center">
+            <img id="enlargedImage" src="" class="img-fluid" />
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endblock %} {% block extra_js %}
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const viewerModalEl = document.getElementById("imageViewerModal");
+        const enlargedImg = document.getElementById("enlargedImage");
+
+        document.querySelectorAll(".card-body img").forEach((img) => {
+          img.addEventListener("click", function () {
+            if (this.src) {
+              enlargedImg.src = this.src;
+              const viewerModal =
+                bootstrap.Modal.getOrCreateInstance(viewerModalEl);
+              viewerModal.show();
+            }
+          });
+        });
+      });
+    </script>
     {% endblock %}
   </body>
 </html>

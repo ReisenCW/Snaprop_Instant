@@ -12,4 +12,6 @@ SQLAlchemy
 Pillow
 requests
 scikit-learn
-numpy
+numpytransformers
+torch
+torchvision

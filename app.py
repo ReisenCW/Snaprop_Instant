@@ -14,6 +14,8 @@ from price.careful_selection import careful_selection
 from price.RealEstateValuation import RealEstateValuation
 from record.record import Record
 from database.mysql_manager import MySQLManager
+from report.ocr import OCR_Table
+from llm.clip_service import clip_service
 
 
 try:
@@ -146,6 +148,102 @@ def upload_file():
         })
     
     return jsonify({'success': False, 'error': '不允许的文件类型'})
+
+
+@app.route('/api/ocr_extract', methods=['POST'])
+def api_ocr_extract():
+    """提取房产证OCR数据"""
+    try:
+        data = request.get_json()
+        image_path = data.get('image_path')
+        if not image_path:
+            return jsonify({"success": False, "error": "缺少图片路径"}), 400
+        
+        # 使用 OCR_Table 处理
+        ocr_processor = OCR_Table()
+        result_str = ocr_processor.trans_to_str(image_path)
+        
+        if not result_str:
+            return jsonify({"success": False, "error": "OCR 提取失败"}), 500
+            
+        result_json = json.loads(result_str)
+        content = result_json.get('body', {}).get('Data', {}).get('Content', '')
+        
+        # 简单提取 logic
+        extracted_info = {
+            "address": "",
+            "area": 0.0,
+            "room": 2,
+            "hall": 1,
+            "year": 2015
+        }
+        
+        # 提取地址: 房地坐落/坐落
+        addr_match = re.search(r'(?:房地坐落|坐落)\s*[:：\s]*([^\n\r，。;；]*)', content)
+        if addr_match:
+            extracted_info["address"] = addr_match.group(1).strip()
+            
+        # 提取建筑面积, 注意可能含小数点
+        area_match = re.search(r'建筑面积\s*[:：\s]*(\d+(\.\d+)?)\s*(?:平方米|㎡|平米|平)?', content)
+        if not area_match:
+            area_match = re.search(r'(\d+(\.\d+)?)\s*(?:平方米|㎡|平米|平)', content)
+        if area_match:
+            try:
+                extracted_info["area"] = float(area_match.group(1))
+            except:
+                pass
+            
+        # 户型提取 (如: 2室1厅, 3房2厅)
+        room_match = re.search(r'(\d+)\s*(?:室|房)', content)
+        if room_match:
+            extracted_info["room"] = int(room_match.group(1))
+        
+        hall_match = re.search(r'(\d+)\s*(?:厅)', content)
+        if hall_match:
+            extracted_info["hall"] = int(hall_match.group(1))
+            
+        # 年份提取, 查找 20XX年 或 19XX年
+        year_match = re.search(r'((?:20|19)\d{2})\s*年', content)
+        if not year_match:
+             year_match = re.search(r'((?:20|19)\d{2})[-\/]\d{2}[-\/]\d{2}', content)
+        if year_match:
+            extracted_info["year"] = int(year_match.group(1))
+
+        return jsonify({
+            "success": True,
+            "data": extracted_info
+        })
+    except Exception as e:
+        print(f"OCR分析详细错误: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/recognize_decoration', methods=['POST'])
+def api_recognize_decoration():
+    """识别装修情况: 自动判别装修是精装/简装/毛坯，使用CLIP模型"""
+    try:
+        data = request.get_json()
+        image_path = data.get('image_path')
+        if not image_path:
+            return jsonify({"success": False, "error": "缺少图片路径"}), 400
+        
+        # 将相对路径转换为绝对路径
+        if not os.path.isabs(image_path):
+            if image_path.startswith('/static/'):
+                image_path = image_path.replace('/static/', 'static/')
+            image_path = os.path.join(os.getcwd(), image_path)
+        
+        # 使用 CLIPService 进行识别
+        result = clip_service.classify_decoration(image_path)
+        
+        return jsonify({
+            "success": True,
+            "decoration": result
+        })
+    except Exception as e:
+        print(f"Decoration recognition error: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route('/api/valuation', methods=['POST'])
 def api_valuation():
