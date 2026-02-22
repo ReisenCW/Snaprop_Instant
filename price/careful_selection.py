@@ -138,8 +138,6 @@ class careful_selection:
             df = pd.DataFrame()
             
             for strategy in strategies:
-                # print(f"尝试筛选策略: {strategy['name']}...")
-                
                 conditions = []
                 
                 # 1. 地址条件
@@ -171,11 +169,14 @@ class careful_selection:
                 # 如果找到足够数量的案例（例如至少3个），则停止
                 if not temp_df.empty and len(temp_df) >= 3:
                     df = temp_df
-                    print(f"策略 [{strategy['name']}] 成功，找到 {len(df)} 个案例")
+                    msg = f"找到 {len(df)} 个案例进行IMCA估值"
+                    print(msg)
+                    self.last_strategy_msg = msg
                     break
             
             if df.empty:
-                print("所有策略均未找到符合条件的案例")
+                self.last_strategy_msg = "所有策略均未找到符合条件的案例"
+                print(self.last_strategy_msg)
                 return []
             
             # 数据清理

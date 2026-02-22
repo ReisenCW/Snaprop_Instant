@@ -870,7 +870,7 @@ class property_report:
                      property_summary: str = "", report_index: str = "",
                      ocr_table: list = None, appendix: dict = None, city: tuple = ("", "", ""), environment: str = "",
                      traffic: str = "", property_size="",
-                     property_price: int = 0):
+                     property_price: int = 0, occupancy: str = "于估价时点，估价对象为空置状态"):
         if appendix is None:
             appendix = {}
         self.set_cover(cover_img)
@@ -907,7 +907,7 @@ class property_report:
                 "__": property_summary,
             },
             "占用概况": {
-                "__": "于估价时点，估价对象为空置状态"
+                "__": occupancy
             },
             "评估基准": {
                 "评估物业": f"评估物业为{self.property_name}，总建筑面积为{property_size}。",
@@ -940,15 +940,33 @@ class property_report:
         self.result.generate()
 
     def save_report(self, uid: int, record: Record):
-        logo_img = "report/logo_img.png"
+        # 优先使用 record 中上传的 logo，如果没有则使用默认 logo
+        if record.report_logo:
+             # report_logo 可能是路径或文件名，如果是文件名需拼接
+             if os.path.isabs(record.report_logo) or "/" in record.report_logo or "\\" in record.report_logo:
+                 logo_img = record.report_logo
+             else:
+                 logo_img = os.path.join("static/uploads", record.report_logo)
+        else:
+             logo_img = "report/logo_img.png"
+             
         cover_img = record.field_img[0] if record.field_img else None
-        client_name = "{}（委托人）".format(uid)  # TODO:数据库里根据uid查找用户名
+        
+        # 优先使用 record 中的委托人姓名
+        if record.client_name:
+            client_name = record.client_name
+        else:
+            client_name = "{}（委托人）".format(uid)  # TODO:数据库里根据uid查找用户名
 
-        # TODO:后续处理
-        property_summary = (
-            f"估价对象位于「{record.house_location}」内，该社区于{record.house_year}年竣工。根据估价人员现场勘查及权利人提供之相关资料，"
-            f"估价对象为{record.house_type}的户型。总建筑面积为{record.house_area}平方米。估价对象为{record.house_structure}。"
-            f"于估价时点，估价对象为{record.house_decorating}。")
+        # 优先使用 record 中的物业概况描述
+        if record.property_overview:
+            property_summary = record.property_overview
+        else:
+            property_summary = (
+                f"估价对象位于「{record.house_location}」内，该社区于{record.house_year}年竣工。根据估价人员现场勘查及权利人提供之相关资料，"
+                f"估价对象为{record.house_type}的户型。总建筑面积为{record.house_area}平方米。估价对象为{record.house_structure}。"
+                f"于估价时点，估价对象为{record.house_decorating}。")
+        
         # property_index = "【房地产权证】沪(2017)浦字不动产权第015342号"
         property_index = "【房地产权证】"
         print(record.production_ocr)
@@ -983,15 +1001,33 @@ class property_report:
         city = (record.city, 
                 city_introduction or f"{record.city}市是中国重要的中心城市之一。", 
                 city_detail or "区域内拥有完善的基础设施与良好的经济基础。")
-        environment = environment_main(record.house_location,record.city)
-        traffic = "评估物业交通便利，周边路网干线丰富，公交和出租车均可到达。\n\n评估物业坐落图请见附录1"
+        
+        # 优先使用 record 中的环境描述
+        if record.surrounding_environment:
+            environment = record.surrounding_environment
+        else:
+            try:
+                # environment_main 已经在文件顶部从 record.save_map 导入
+                environment = environment_main(record.house_location, record.city)
+            except:
+                environment = f"{record.house_location}周边环境优美，配套设施齐全。"
+
+        # 优先使用 record 中的交通描述
+        if record.traffic_conditions:
+            traffic = record.traffic_conditions
+        else:
+            traffic = "评估物业交通便利，周边路网干线丰富，公交和出租车均可到达。\n\n评估物业坐落图请见附录1"
+            
+        # 占用状况
+        occupancy = record.occupancy_status if record.occupancy_status else "于估价时点，估价对象为空置状态"
+        
         property_price = int(record.price * (record.house_area if record.house_area else 0))
         report_index = f"No.{datetime.now().strftime('%Y%m%d%H%M%S')}"
         self.model_report(cover_img=cover_img, logo_img=logo_img, client_name=client_name,
                           property_summary=property_summary, property_index=property_index,
                           ocr_table=ocr_table, appendix=appendix, city=city, environment=environment,
                           traffic=traffic, property_price=property_price, property_size=str(record.house_area),
-                          report_index=report_index)
+                          report_index=report_index, occupancy=occupancy)
 
 
 # if __name__ == "__main__":

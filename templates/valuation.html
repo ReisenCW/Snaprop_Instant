@@ -149,10 +149,10 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
       </div>
     </div>
 
-    <!-- 房屋外观照片卡片 -->
+    <!-- 房屋外观/详情照片 -->
     <div class="card shadow-sm mb-4">
       <div class="card-header bg-primary text-white">
-        <h5 class="card-title mb-0"><i class="bi bi-house me-2"></i>房屋外观/详情</h5>
+        <h5 class="card-title mb-0"><i class="bi bi-house me-2"></i>房屋外观</h5>
       </div>
       <div class="card-body">
         <div class="mb-3">
@@ -166,38 +166,11 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
           <div class="text-center mt-2">
             <img id="photoPreview" class="upload-preview img-thumbnail" style="display: none; max-height: 200px;" />
           </div>
-          <div id="decorationStatusLabel" class="mt-2 text-primary fw-bold" style="display: none;">
-            CLIP 识别装修情况: <span id="decorationResult">分析中...</span>
-          </div>
-          <div id="decorationManualSelect" class="mt-2" style="display: none;">
-            <div class="row align-items-center">
-              <div class="col-8">
-                <select id="manualDecoration" class="form-select form-select-sm">
-                  <option value="毛坯">毛坯</option>
-                  <option value="简装">简装</option>
-                  <option value="精装">精装</option>
-                </select>
-              </div>
-              <div class="col-4">
-                <button type="button" id="syncDecorationBtn" class="btn btn-sm btn-success">确认同步</button>
-              </div>
-            </div>
-          </div>
           <input
             type="hidden"
             id="propertyPhotoPath"
             name="propertyPhotoPath"
           />
-        </div>
-        <div class="mb-3">
-          <label for="description" class="form-label">房产描述</label>
-          <textarea
-            class="form-control"
-            id="description"
-            name="description"
-            rows="5"
-            placeholder="请输入房产的详细描述，如户型、朝向、小区环境等"
-          ></textarea>
         </div>
       </div>
     </div>
@@ -451,6 +424,65 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
             <div class="form-text small mt-2">说明：输入修正因子（如5%代表每层楼/每年差异调整5%单价）。</div>
           </div>
 
+      </div>
+    </div>
+
+    <!-- 房产报告信息 (移动至此) -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-primary text-white">
+        <h5 class="card-title mb-0"><i class="bi bi-file-earmark-text me-2"></i>房产报告信息</h5>
+      </div>
+      <div class="card-body">
+        <div class="row mb-3">
+          <div class="col-6">
+            <label for="clientName" class="form-label">敬启者（委托人） <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="clientName" name="clientName" value="同小舟" required />
+          </div>
+          <div class="col-6">
+            <label for="reportLogo" class="form-label">报告Logo</label>
+            <div class="input-group input-group-sm">
+              <input type="file" class="form-control" id="reportLogo" accept="image/*" />
+            </div>
+            <div class="mt-2 text-center">
+              <img id="logoPreview" class="img-thumbnail p-1" style="display: none; max-height: 48px; border-style: dashed;" />
+            </div>
+            <input type="hidden" id="reportLogoPath" name="reportLogoPath" />
+          </div>
+        </div>
+
+        <div class="d-grid gap-2 mb-3">
+          <button type="button" id="generateReportBasicsBtn" class="btn btn-outline-primary">
+            <i class="bi bi-magic me-1"></i>一键生成默认内容
+          </button>
+        </div>
+
+        <hr class="my-3 mx-n3" style="border-top: 2px solid #eee;">
+
+        <div class="mb-3">
+          <label for="surrounding" class="form-label">临近环境及建筑物 <span class="text-danger">*</span></label>
+          <textarea class="form-control" id="surrounding" name="surrounding" rows="3" required placeholder="生成后的临近环境及建筑物描述"></textarea>
+        </div>
+
+        <div class="mb-3">
+          <label for="traffic" class="form-label">交通条件 <span class="text-danger">*</span></label>
+          <textarea class="form-control" id="traffic" name="traffic" rows="3" required placeholder="生成后的交通便捷程度及主要设施"></textarea>
+        </div>
+
+        <div class="mb-3">
+          <label for="propertyOverview" class="form-label">物业概况 <span class="text-danger">*</span></label>
+          <textarea class="form-control" id="propertyOverview" name="propertyOverview" rows="3" required placeholder="生成后的物业整体概况"></textarea>
+        </div>
+
+        <div class="mb-3">
+          <label for="occupancy" class="form-label">占用概况 <span class="text-danger">*</span></label>
+          <textarea class="form-control" id="occupancy" name="occupancy" rows="2" required placeholder="生成后的物业占用及租赁情况"></textarea>
+        </div>
+
+        <div class="d-grid gap-2 mb-3">
+          <button type="button" id="confirmReportBasicsBtn" class="btn btn-success">
+            <i class="bi bi-check-circle me-1"></i>确认报告信息
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -791,43 +823,6 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
         } else {
           confirmBtn.textContent = "表格识别失败，请手动填写";
         }
-      } else if (fileType === "propertyPhoto") {
-        // 外观识别装修情况
-        const statusLabel = document.getElementById("decorationStatusLabel");
-        const statusResult = document.getElementById("decorationResult");
-        const manualSelect = document.getElementById("decorationManualSelect");
-        const manualDecoration = document.getElementById("manualDecoration");
-        
-        statusLabel.style.display = "block";
-        statusResult.textContent = "CLIP 正在分析装修情况...";
-        manualSelect.style.display = "none";
-
-        const decoResp = await axios.post("/api/recognize_decoration", { image_path: filePath });
-        if (decoResp.data.success) {
-          const deco = decoResp.data.decoration;
-          statusResult.textContent = deco;
-          
-          // 显示手动修改并设置默认值为识别出的值
-          manualSelect.style.display = "block";
-          manualDecoration.value = deco;
-
-          // 自动填充基本信息中的装修字段
-          document.getElementById("fitment").value = deco;
-          
-          // 添加同步按钮监听
-          document.getElementById("syncDecorationBtn").onclick = function() {
-            const chosen = manualDecoration.value;
-            document.getElementById("fitment").value = chosen;
-            statusResult.textContent = chosen + " (已同步)";
-            this.textContent = "✓ 已同步";
-            setTimeout(() => {
-                this.textContent = "同步至基本信息";
-            }, 2000);
-          };
-        } else {
-          statusResult.textContent = "识别失败";
-          manualSelect.style.display = "block"; // 识别失败也显示手动选择
-        }
       }
     } catch (error) {
       console.error("文件流程错误:", error);
@@ -837,6 +832,37 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
 
   // 提交估值表单
   async function submitValuation() {
+    // 1. 必填项校验
+    const requiredFields = [
+      { id: "address", name: "房产地址" },
+      { id: "city", name: "所在城市" },
+      { id: "area", name: "建筑面积" },
+      { id: "clientName", name: "敬启者（委托人）" },
+      { id: "surrounding", name: "临近环境" },
+      { id: "traffic", name: "交通条件" },
+      { id: "propertyOverview", name: "物业概况" },
+      { id: "occupancy", name: "占用概况" }
+    ];
+
+    let firstMissing = null;
+    requiredFields.forEach(field => {
+      const el = document.getElementById(field.id);
+      if (!el.value.trim()) {
+        el.classList.add("is-invalid");
+        if (!firstMissing) firstMissing = field;
+      } else {
+        el.classList.remove("is-invalid");
+      }
+    });
+
+    if (firstMissing) {
+      alert(`请填写必填项: ${firstMissing.name}`);
+      const el = document.getElementById(firstMissing.id);
+      el.focus();
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     // 获取版本类型
     const version = document.querySelector('input[name="versionType"]:checked').value;
     
@@ -856,7 +882,15 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
       bathroom: parseInt(document.getElementById("bathroom").value),
       cert_image: document.getElementById("certImagePath").value,
       property_photo: document.getElementById("propertyPhotoPath").value,
-      description: document.getElementById("description").value,
+      
+      // 新增报告描述信息
+      client_name: document.getElementById("clientName").value,
+      report_logo: document.getElementById("reportLogoPath").value,
+      surrounding_env: document.getElementById("surrounding").value,
+      traffic_cond: document.getElementById("traffic").value,
+      prop_overview: document.getElementById("propertyOverview").value,
+      occupancy_status: document.getElementById("occupancy").value,
+      
       version: version,
       ocr_table: (function() {
           const inputs = Array.from(document.querySelectorAll(".ocr-cell-input"));
@@ -1083,6 +1117,95 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
       document.getElementById("propertyPhotoPath"),
     );
 
+    // 初始化报告 Logo 上传 (简单上传，不裁剪)
+    const logoInput = document.getElementById("reportLogo");
+    const logoPreview = document.getElementById("logoPreview");
+    logoInput.addEventListener("change", async function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", "report_logo");
+
+      try {
+        const uploadResp = await axios.post("/api/upload", formData);
+        if (uploadResp.data.success) {
+           document.getElementById("reportLogoPath").value = uploadResp.data.file_path;
+           if (logoPreview) {
+             logoPreview.src = uploadResp.data.url;
+             logoPreview.style.display = "inline-block";
+           }
+        }
+      } catch (err) {
+        console.error("Logo upload error:", err);
+      }
+    });
+
+    // 一键生成报告基本信息
+    document.getElementById("generateReportBasicsBtn").addEventListener("click", async function() {
+        const address = document.getElementById("address").value;
+        const city = document.getElementById("city").value;
+        const area = document.getElementById("area").value;
+        const year = document.getElementById("year").value;
+        const fitment = document.getElementById("fitment").value;
+        const room = document.getElementById("room").value;
+        const hall = document.getElementById("hall").value;
+        const structure = document.getElementById("structure").value;
+
+        if (!address || !city || !area) {
+            alert("请先填写基本信息（地址、城市、面积），以便生成准确的描述。");
+            return;
+        }
+
+        // 调用百度地图及AI生成周边环境
+        const surroundingEl = document.getElementById("surrounding");
+        const originalBtnText = this.innerHTML;
+        this.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> 正在生成内容...';
+        this.disabled = true;
+        surroundingEl.value = "正在调用百度地图 API 并通过 AI 生成周边环境描述，请稍候...";
+
+        try {
+            const resp = await axios.post("/api/get_surrounding", { address, city });
+            if (resp.data.success && resp.data.description) {
+                surroundingEl.value = resp.data.description;
+            } else {
+                surroundingEl.value = `该物业位于「${address}」内，周边配套设施完善，包含商业、教育、医疗配套，居住氛围浓厚。`;
+            }
+        } catch (err) {
+            console.error("Fetch surrounding error:", err);
+            surroundingEl.value = `该物业位于「${address}」内，周边配套设施完善。`;
+        } finally {
+            this.innerHTML = originalBtnText;
+            this.disabled = false;
+        }
+
+        document.getElementById("traffic").value = `评估物业交通便利，周边路网干线丰富，公交和出租车均可顺畅到达。`;
+        document.getElementById("propertyOverview").value = `该物业所在小区于${year}年竣工。估价对象为${room}室${hall}厅的${structure}，总建筑面积为${area}平方米。目前装修状况为${fitment}。`;
+        document.getElementById("occupancy").value = `于估价时点，估价对象为空置状态。`;
+    });
+
+    // 确认按钮
+    document.getElementById("confirmReportBasicsBtn").addEventListener("click", function() {
+        const basics = ["clientName", "surrounding", "traffic", "propertyOverview", "occupancy"];
+        let allFilled = true;
+        basics.forEach(id => {
+            if (!document.getElementById(id).value.trim()) {
+                allFilled = false;
+            }
+        });
+        
+        if (allFilled) {
+             this.textContent = "✓ 已确认";
+             this.className = "btn btn-success";
+             setTimeout(() => {
+                 this.innerHTML = '<i class="bi bi-check-circle me-1"></i>确认';
+             }, 2000);
+        } else {
+             alert("请完成所有必填的报告基础信息内容。");
+        }
+    });
+
     // 房产证 OCR 数据确认逻辑 (从编辑后的表格中进行智能匹配)
     document.getElementById("confirmOcrBtn").addEventListener("click", function() {
       // 1. 获取动态表格中的实时内容并转换为网格
@@ -1307,11 +1430,26 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
 
     // 提交按钮点击事件
     document.getElementById("submitBtn").addEventListener("click", function () {
-      // 表单验证
-      const form = document.getElementById("valuationForm");
-      if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
+      // 基本字段验证
+      const requiredFields = [
+        { id: "address", name: "房产地址" },
+        { id: "city", name: "所在城市" },
+        { id: "area", name: "建筑面积" },
+        // 新增报告必填字段
+        { id: "clientName", name: "敬启者（委托人）" },
+        { id: "surrounding", name: "临近环境及建筑物" },
+        { id: "traffic", name: "交通条件" },
+        { id: "propertyOverview", name: "物业概况" },
+        { id: "occupancy", name: "占用概况" }
+      ];
+
+      for (const field of requiredFields) {
+        const el = document.getElementById(field.id);
+        if (!el || !el.value.trim() || (field.id === 'area' && isNaN(parseFloat(el.value)))) {
+          alert(`请填写必填项: ${field.name}`);
+          el.focus();
+          return;
+        }
       }
 
       submitValuation();

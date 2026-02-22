@@ -31,6 +31,14 @@ class Record:
         self.production_cert_img: list[str] = []  # 产证图片，可能多张
         self.production_ocr: str = ""  # OCR识别表格
         self.field_img: list[str] = []  # 实地图片，可能多张
+        
+        # 报告相关的属性
+        self.client_name: str = "同小舟"
+        self.report_logo: str = ""
+        self.surrounding_environment: str = ""
+        self.traffic_conditions: str = ""
+        self.property_overview: str = ""
+        self.occupancy_status: str = ""
 
     def clear(self):
         self.house_location = ""
@@ -42,11 +50,20 @@ class Record:
         self.house_floor = ""
         self.house_decorating = ""
         self.green_rate = 0.0
+        # 报告信息重置
+        self.client_name = "同小舟"
+        self.report_logo = ""
+        self.surrounding_environment = ""
+        self.traffic_conditions = ""
+        self.property_overview = ""
+        self.occupancy_status = ""
+        
         #把文件删了
         self._clean_file(self.map)  # 清理地图文件
         self._clean_files(self.production_cert_img)  # 清理产权证明图片
         self._clean_file(self.production_ocr)  # 清理OCR文件
         self._clean_files(self.field_img)  # 清理实地照片
+        self._clean_file(self.report_logo) # 清理Logo文件
         self.map = ""
         self.production_cert_img.clear()
         self.production_ocr = ""

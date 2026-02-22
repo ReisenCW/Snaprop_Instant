@@ -17,7 +17,6 @@ from record.record import Record
 from database.mysql_manager import MySQLManager
 from report.ocr import OCR_Table
 from report.report_gen import property_report
-from llm.clip_service import clip_service
 
 
 try:
@@ -150,6 +149,28 @@ def upload_file():
         })
     
     return jsonify({'success': False, 'error': '不允许的文件类型'})
+
+
+@app.route('/api/get_surrounding', methods=['POST'])
+def api_get_surrounding():
+    """获取周边环境描述API"""
+    try:
+        data = request.get_json()
+        address = data.get('address')
+        city = data.get('city')
+        
+        if not address or not city:
+            return jsonify({"success": False, "error": "缺少地址或城市"}), 400
+            
+        from record.save_map import environment_main
+        description = environment_main(address, city)
+        
+        return jsonify({
+            "success": True, 
+            "description": description
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/export_excel', methods=['POST'])
@@ -350,34 +371,6 @@ def api_ocr_extract():
         print(f"OCR分析详细错误: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-
-@app.route('/api/recognize_decoration', methods=['POST'])
-def api_recognize_decoration():
-    """识别装修情况: 自动判别装修是精装/简装/毛坯，使用CLIP模型"""
-    try:
-        data = request.get_json()
-        image_path = data.get('image_path')
-        if not image_path:
-            return jsonify({"success": False, "error": "缺少图片路径"}), 400
-        
-        # 将相对路径转换为绝对路径
-        if not os.path.isabs(image_path):
-            if image_path.startswith('/static/'):
-                image_path = image_path.replace('/static/', 'static/')
-            image_path = os.path.join(os.getcwd(), image_path)
-        
-        # 使用 CLIPService 进行识别
-        result = clip_service.classify_decoration(image_path)
-        
-        return jsonify({
-            "success": True,
-            "decoration": result
-        })
-    except Exception as e:
-        print(f"Decoration recognition error: {str(e)}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
 @app.route('/api/valuation', methods=['POST'])
 def api_valuation():
     """估值API"""
@@ -470,6 +463,9 @@ def api_valuation():
                     
                     df = selction_example.selction()
                     
+                    if hasattr(selction_example, 'last_strategy_msg'):
+                        yield json.dumps({"status": "progress", "stage": "estimate", "message": f"{selction_example.last_strategy_msg}，正在计算估值..."}) + "\n"
+
                     if df:
                         comparable_cases = []
                         for i in df[:]:
@@ -514,6 +510,10 @@ def api_valuation():
                 
                 # 开始估价计算
                 estimation_result = valuation_system.estimate_property_value(target_property, comparable_cases, pro_adjustments=pro_adjustments)
+                
+                # 进入预测阶段
+                yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成基础估值，通过AI预测进行微调..."}) + "\n"
+                
                 trend_factor = 0.0
                 min_trend = 0.0
                 max_trend = 0.0
@@ -548,40 +548,22 @@ def api_valuation():
                     estimation_result['price_range'] = [min_adjusted_price, max_adjusted_price]
                     
                     if prediction:
-                        if is_segmented and seg_info:
-                            # 处理分段趋势样式: 上升/下降|a-b|
-                            if len(seg_info) == 2:
-                                trend_desc = "上升/下降"
-                                trend_str = f"|{seg_info[0]:.1%} - {seg_info[1]:.1%}|"
-                            else:
-                                # 下降/上升 情景
-                                trend_desc = seg_info[2]
-                                trend_str = f"|{seg_info[0]:.1%} - {seg_info[1]:.1%}|"
-                        else:
-                            if trend_factor == 0:
-                                trend_desc = "维持稳定"
-                                trend_str = "0.00%"
-                            else:
-                                trend_desc = "上涨" if trend_factor > 0 else "下跌"
-                                abs_min = abs(min_trend)
-                                abs_max = abs(max_trend)
-                                if abs_min == abs_max:
-                                    trend_str = f"{abs_min:.2%}"
-                                else:
-                                    trend_str = f"{min(abs_min, abs_max):.2%} ~ {max(abs_min, abs_max):.2%}"
+                        # 提取更干净的核心预测文本
+                        short_prediction = prediction.strip()
+                        # 尝试捕获冒号后的核心预测段落 (例如: ...: - 先小幅上升...)
+                        if ":" in short_prediction:
+                            parts = short_prediction.split(":", 1)
+                            short_prediction = parts[1].strip()
+                        if short_prediction.startswith("- "):
+                            short_prediction = short_prediction[2:].strip()
                         
                         # 处理单价范围显示，若相同则只显示一个值
                         adj_price_str = f"{min_adjusted_price:.2f} - {max_adjusted_price:.2f}"
                         if abs(min_adjusted_price - max_adjusted_price) < 0.01:
                             adj_price_str = f"{min_adjusted_price:.2f}"
 
-                        estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {time_range} 的房价趋势预测，\n市场预期{trend_desc} {trend_str}。\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{adj_price_str} 元/平"
-                        
-                        # 加入预测正文分析
-                        prediction_body = prediction.strip()
-                        if "房价预测结果:" in prediction_body:
-                            prediction_body = prediction_body.split("房价预测结果:")[-1].strip()
-                        estimation_result['explanation'] += f"\n\n分析细节：\n{prediction_body}"
+                        estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {time_range} 的房价趋势预测：\n{short_prediction}\n\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{adj_price_str} 元/平"
+                        # 移除了细节分析部分以简化结果显示
 
                 yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成趋势预测与价值微调", "done": True}) + "\n"
 
@@ -609,6 +591,14 @@ def api_valuation():
                 u_record.city = data.get('city', '上海')
                 u_record.house_area = area
                 
+                # 填充报告描述信息
+                u_record.client_name = data.get('client_name', '同小舟')
+                u_record.report_logo = data.get('report_logo', '')
+                u_record.surrounding_environment = data.get('surrounding_env', '')
+                u_record.traffic_conditions = data.get('traffic_cond', '')
+                u_record.property_overview = data.get('prop_overview', '')
+                u_record.occupancy_status = data.get('occupancy_status', '')
+                
                 room = data.get('room', 2)
                 hall = data.get('hall', 1)
                 kitchen = data.get('kitchen', 1)
@@ -631,6 +621,7 @@ def api_valuation():
                         # 将列表处理成 save_report 需要的格式
                         temp_ocr_path = data.get('cert_image').replace('.png', '_tmp.xlsx').replace('.jpg', '_tmp.xlsx').replace('.jpeg', '_tmp.xlsx')
                         try:
+                            import openpyxl # 确保导入
                             wb = openpyxl.Workbook()
                             ws = wb.active
                             for r_idx, r_data in enumerate(data.get('ocr_table')):
