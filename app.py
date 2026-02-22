@@ -10,11 +10,13 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context, send_file
 from werkzeug.utils import secure_filename
 import pandas as pd
+import openpyxl
 from price.careful_selection import careful_selection
 from price.RealEstateValuation import RealEstateValuation
 from record.record import Record
 from database.mysql_manager import MySQLManager
 from report.ocr import OCR_Table
+from report.report_gen import property_report
 from llm.clip_service import clip_service
 
 
@@ -515,6 +517,7 @@ def api_valuation():
                 trend_factor = 0.0
                 min_trend = 0.0
                 max_trend = 0.0
+                prediction = None
                 
                 try:
                     address = data.get('address', '')
@@ -526,7 +529,7 @@ def api_valuation():
                     time_range = f"{beforeTime.strftime('%Y年%m月')}-{afterTime.strftime('%Y年%m月')}"
                     
                     query = f"{time_range}, {region}的房价走势如何?"
-                    prediction = predict_region(query, max_retries=3, enable_evolution=False, debug=True)
+                    prediction = predict_region(query, max_retries=2, enable_evolution=False, debug=True)
                     
                     if prediction:
                         min_trend, max_trend, is_segmented, seg_info = extract_trend_factor(prediction)
@@ -544,7 +547,7 @@ def api_valuation():
                     estimation_result['trend_factor'] = trend_factor
                     estimation_result['price_range'] = [min_adjusted_price, max_adjusted_price]
                     
-                    if trend_factor != 0:
+                    if prediction:
                         if is_segmented and seg_info:
                             # 处理分段趋势样式: 上升/下降|a-b|
                             if len(seg_info) == 2:
@@ -555,13 +558,17 @@ def api_valuation():
                                 trend_desc = seg_info[2]
                                 trend_str = f"|{seg_info[0]:.1%} - {seg_info[1]:.1%}|"
                         else:
-                            trend_desc = "上涨" if trend_factor > 0 else "下跌"
-                            abs_min = abs(min_trend)
-                            abs_max = abs(max_trend)
-                            if abs_min == abs_max:
-                                trend_str = f"{abs_min:.2%}"
+                            if trend_factor == 0:
+                                trend_desc = "维持稳定"
+                                trend_str = "0.00%"
                             else:
-                                trend_str = f"{min(abs_min, abs_max):.2%} ~ {max(abs_min, abs_max):.2%}"
+                                trend_desc = "上涨" if trend_factor > 0 else "下跌"
+                                abs_min = abs(min_trend)
+                                abs_max = abs(max_trend)
+                                if abs_min == abs_max:
+                                    trend_str = f"{abs_min:.2%}"
+                                else:
+                                    trend_str = f"{min(abs_min, abs_max):.2%} ~ {max(abs_min, abs_max):.2%}"
                         
                         # 处理单价范围显示，若相同则只显示一个值
                         adj_price_str = f"{min_adjusted_price:.2f} - {max_adjusted_price:.2f}"
@@ -569,15 +576,90 @@ def api_valuation():
                             adj_price_str = f"{min_adjusted_price:.2f}"
 
                         estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {time_range} 的房价趋势预测，\n市场预期{trend_desc} {trend_str}。\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{adj_price_str} 元/平"
+                        
+                        # 加入预测正文分析
+                        prediction_body = prediction.strip()
+                        if "房价预测结果:" in prediction_body:
+                            prediction_body = prediction_body.split("房价预测结果:")[-1].strip()
+                        estimation_result['explanation'] += f"\n\n分析细节：\n{prediction_body}"
 
                 yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成趋势预测与价值微调", "done": True}) + "\n"
 
-                # 生成报告
-                report_path = valuation_system.generate_report(property_data, estimation_result, target_property)
+                # 提取一些必要数值
                 area = float(data.get('area', 90))
                 total_price = estimation_result['estimated_price'] * area
                 
-                # 构建最终响应
+                # 生成报告文件名 (提前生成以便存入 JSON)
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                pdf_filename = f"valuation_report_{timestamp}.pdf"
+                pdf_url = f"/api/reports/{pdf_filename}"
+                
+                # 生成报告 JSON (存入 JSON 时包含 pdf_url)
+                report_path = valuation_system.generate_report(property_data, estimation_result, target_property, price_prediction=prediction, pdf_url=pdf_url)
+                
+                # 生成及保存 PDF 报告
+                reports_dir = os.path.join("static", "reports")
+                os.makedirs(reports_dir, exist_ok=True)
+                pdf_path = os.path.join(reports_dir, pdf_filename)
+                
+                # 构造 Record 对象用于 PDF 生成
+                u_id = 999  # 临时使用的 UID
+                u_record = Record(u_id)
+                u_record.house_location = data.get('address', '未知')
+                u_record.city = data.get('city', '上海')
+                u_record.house_area = area
+                
+                room = data.get('room', 2)
+                hall = data.get('hall', 1)
+                kitchen = data.get('kitchen', 1)
+                bathroom = data.get('bathroom', 1)
+                u_record.house_type = f"{room}室{hall}厅{kitchen}厨{bathroom}卫"
+                
+                u_record.house_year = int(data.get('year', 2015))
+                u_record.house_floor = data.get('floor', '中楼层')
+                u_record.house_decorating = data.get('fitment', '简装')
+                u_record.house_structure = data.get('structure', '平层')
+                u_record.green_rate = green_val
+                u_record.price = estimation_result['estimated_price']
+                
+                # 地图和图片
+                u_record.map = processed_data.get('original_data', {}).get('map_image', '')
+                if data.get('cert_image'):
+                    u_record.production_cert_img = [data.get('cert_image')]
+                    # 如果前端传了表格数据，直接用前端的；否则用文件路径
+                    if data.get('ocr_table'):
+                        # 将列表处理成 save_report 需要的格式
+                        temp_ocr_path = data.get('cert_image').replace('.png', '_tmp.xlsx').replace('.jpg', '_tmp.xlsx').replace('.jpeg', '_tmp.xlsx')
+                        try:
+                            wb = openpyxl.Workbook()
+                            ws = wb.active
+                            for r_idx, r_data in enumerate(data.get('ocr_table')):
+                                for c_idx, val in enumerate(r_data):
+                                    ws.cell(row=r_idx+1, column=c_idx+1, value=str(val) if val is not None else "")
+                            wb.save(temp_ocr_path)
+                            u_record.production_ocr = temp_ocr_path
+                        except Exception as e:
+                            print(f"临时Excel生成失败: {str(e)}")
+                            u_record.production_ocr = data.get('cert_image').replace('.png', '_OCR.xlsx').replace('.jpg', '_OCR.xlsx').replace('.jpeg', '_OCR.xlsx')
+                    else:
+                        u_record.production_ocr = data.get('cert_image').replace('.png', '_OCR.xlsx').replace('.jpg', '_OCR.xlsx').replace('.jpeg', '_OCR.xlsx')
+                
+                if data.get('property_photo'):
+                    u_record.field_img = [data.get('property_photo')]
+                
+                pdf_gen_success = False
+                try:
+                    pdf_report = property_report(pdf_path, u_record.house_location)
+                    pdf_report.save_report(u_id, u_record)
+                    pdf_gen_success = True
+                except Exception as pdf_error:
+                    print(f"PDF生成失败: {str(pdf_error)}")
+                    import traceback
+                    traceback.print_exc()
+
+                # 构建最终响应 (如果有 pdf_url 则传回)
+                final_pdf_url = pdf_url if pdf_gen_success else None
+                
                 response_data = {
                     'success': True,
                     'estimated_price': estimation_result['estimated_price'],
@@ -587,6 +669,7 @@ def api_valuation():
                     'total_price_range': [p * area for p in estimation_result.get('price_range', [estimation_result['estimated_price'], estimation_result['estimated_price']])],
                     'explanation': estimation_result['explanation'],
                     'report_path': report_path,
+                    'pdf_url': final_pdf_url
                 }
                 
                 yield json.dumps({"status": "success", "result": response_data}) + "\n"
@@ -611,7 +694,7 @@ def get_report(filename):
 
 @app.route('/reports')
 def reports():
-    """报告列表页面"""
+    """估值记录列表页面"""
     reports_dir = os.path.join("static", "reports")
     os.makedirs(reports_dir, exist_ok=True)
     
@@ -646,7 +729,7 @@ def reports():
 
 @app.route('/report/<path:filename>')
 def view_report(filename):
-    """查看报告页面"""
+    """查看估值记录页面"""
     reports_dir = os.path.join("static", "reports")
     
     # 处理不同的路径格式

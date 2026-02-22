@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>估值报告详情 - 房估宝</title>
+    <title>估值结果详情 - 房估宝</title>
   </head>
   <body>
-    {% extends "base.html" %} {% block title %}估值报告详情 - 房估宝{% endblock
+    {% extends "base.html" %} {% block title %}估值结果详情 - 房估宝{% endblock
     %} {% block extra_css %}
     <style>
       .module-header {
@@ -45,7 +45,7 @@
     {% endblock %} {% block content %}
     <div class="row">
       <div class="col-lg-10 mx-auto">
-        <h1 class="mb-4">估值报告详情</h1>
+        <h1 class="mb-4">估值分析详情</h1>
 
         <div class="card mb-4">
           <div class="card-header">
@@ -110,7 +110,7 @@
                     {{ "%.2f"|format(report.estimation_result.confidence * 100)
                     }}%
                   </h3>
-                  <p class="text-muted">置信度</p>
+                  <p class="text-muted">房产估值分析置信度</p>
                 </div>
               </div>
             </div>
@@ -211,9 +211,11 @@
           <a href="/reports" class="btn btn-secondary me-2">
             <i class="bi bi-arrow-left"></i> 返回列表
           </a>
-          <button onclick="window.print()" class="btn btn-primary">
-            <i class="bi bi-printer"></i> 打印报告
-          </button>
+          {% if report.pdf_url %}
+          <a href="{{ report.pdf_url }}" class="btn btn-primary" download>
+            <i class="bi bi-printer"></i> 打印房产评估报告
+          </a>
+          {% endif %}
         </div>
 
         <!-- 房产照片展示 (放在最后) -->

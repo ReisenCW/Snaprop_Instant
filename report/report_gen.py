@@ -1,5 +1,6 @@
 import datetime
 import cn2an
+import os
 import pandas as pd
 from reportlab.lib.colors import black
 from reportlab.pdfgen import canvas
@@ -303,14 +304,27 @@ class PDFGenerator:
         :param font_size: 字体大小
         :return: 列宽列表（点）
         """
-        # 获取列数
-        num_cols = len(data[0])
+        if not data or not isinstance(data, list) or len(data) == 0:
+            return []
+            
+        # 获取最大列数，防止 IndexError
+        num_cols = 0
+        for row in data:
+            if isinstance(row, (list, tuple)):
+                num_cols = max(num_cols, len(row))
+        
+        if num_cols == 0:
+            return []
+            
         # 计算每列的最大内容宽度
         max_widths = [0] * num_cols
         for row in data:
+            if not isinstance(row, (list, tuple)):
+                continue
             for i, cell in enumerate(row):
+                if i >= num_cols: break # 冗余检查
                 # 处理多行文本
-                lines = str(cell).split('\n')
+                lines = str(cell if cell is not None else "").split('\n')
                 for line in lines:
                     # 使用当前字体计算文本宽度
                     width = stringWidth(line, font_name, font_size)
@@ -320,14 +334,11 @@ class PDFGenerator:
         max_widths = [w + padding for w in max_widths]
         # 计算总需求宽度
         total_needed = sum(max_widths)
-        # 如果总需求宽度小于可用宽度，按比例放大
-        if total_needed < total_width:
-            ratio = total_width / total_needed
-            col_widths = [w * ratio for w in max_widths]
-        # 如果总需求宽度大于可用宽度，按比例缩小
-        else:
-            ratio = total_width / total_needed
-            col_widths = [w * ratio for w in max_widths]
+        if total_needed <= 0: return [total_width / num_cols] * num_cols
+        
+        # 按比例分配可用宽度
+        ratio = total_width / total_needed
+        col_widths = [w * ratio for w in max_widths]
         return col_widths
 
     def add_table(self, data, page_number, x, y, width, table_styles=None, col_widths=None,
@@ -429,12 +440,18 @@ class PDFGenerator:
         p.drawOn(canvas, element.x, element.y - h)
 
     def _draw_image(self, canvas, element):
-        img = Image(element.content)
-        if element.width:
-            img.drawWidth = element.width
-        if element.height:
-            img.drawHeight = element.height
-        img.drawOn(canvas, element.x, element.y)
+        if not element.content or not os.path.exists(element.content):
+            print(f"警告: 忽略未找到的图片: {element.content}")
+            return
+        try:
+            img = Image(element.content)
+            if element.width:
+                img.drawWidth = element.width
+            if element.height:
+                img.drawHeight = element.height
+            img.drawOn(canvas, element.x, element.y)
+        except Exception as e:
+            print(f"Error drawing image {element.content}: {e}")
 
     def _draw_table(self, canvas, element, dry_run=False):
         styles = getSampleStyleSheet()
@@ -448,14 +465,29 @@ class PDFGenerator:
             leading=element.font_size * element.factor
         )
         processed_data = []
+        
+        # 确定最大列数，补齐所有行
+        max_cols = 0
+        if element.content:
+            for row in element.content:
+                if isinstance(row, (list, tuple)):
+                    max_cols = max(max_cols, len(row))
+
         for row in element.content:
             processed_row = []
-            for col_idx, cell in enumerate(row):
-                cell = cell if cell is not None else ""  # 新增空值处理
+            if not isinstance(row, (list, tuple)):
+                continue
+            for col_idx in range(max_cols):
+                cell = row[col_idx] if col_idx < len(row) else ""
+                cell = cell if cell is not None else ""  # 空值处理
                 if element.wrap_cols and col_idx in element.wrap_cols:
                     cell = Paragraph(str(cell), cell_style)
                 processed_row.append(cell)
             processed_data.append(processed_row)
+            
+        if not processed_data:
+            return 0
+            
         table = Table(processed_data, colWidths=element.col_widths,
                       rowHeights=element.row_heights)
         table.setStyle(element.table_styles)
@@ -604,8 +636,9 @@ class property_report:
         font = "simkai"
         size = 10
         for i in range(start_page, end_page + 1):
-            self.result.add_image(image_path=logo_img, x=7 * self.width / 10, y=92 * self.height / 100,
-                                  page_number=i, width=2 * self.width / 10, height=7 * self.height / 100)
+            if logo_img is not None:
+                self.result.add_image(image_path=logo_img, x=7 * self.width / 10, y=92 * self.height / 100,
+                                      page_number=i, width=2 * self.width / 10, height=7 * self.height / 100)
             h1 = self.result.add_text(text=self.property_name, x=self.width / 10, y=9 * self.height / 10,
                                       page_number=i, width=19 * size / cm, font_name=font, font_size=size)
             h2 = self.result.add_text(text="估价时点:" + self.date, x=70 * self.width / 100, y=9 * self.height / 10,
@@ -654,7 +687,16 @@ class property_report:
                     y -= title_size / cm * 1.3
                     self.template["目录"][key2] = page_n
                     for img in self.template[key][key2]:
-                        width, height = ImageReader(img).getSize()
+                        if not img or not os.path.exists(img):
+                            print(f"Skipping missing image: {img}")
+                            continue
+                        try:
+                            reader = ImageReader(img)
+                            width, height = reader.getSize()
+                        except Exception as e:
+                            print(f"Error reading image {img}: {e}")
+                            continue
+
                         if (width / height) >= (self.width / (y - min_y + 1e-6)):
                             w = body_width
                             h = w * height / width
@@ -829,6 +871,8 @@ class property_report:
                      ocr_table: list = None, appendix: dict = None, city: tuple = ("", "", ""), environment: str = "",
                      traffic: str = "", property_size="",
                      property_price: int = 0):
+        if appendix is None:
+            appendix = {}
         self.set_cover(cover_img)
         value = {
             "敬启者：": f"%s" % client_name,
@@ -886,16 +930,18 @@ class property_report:
                 "估值结果": 0,
             },
         }
-        for key in appendix.keys():
-            value["目录"][key] = 0
+        if appendix is not None:
+            for key in appendix.keys():
+                value["目录"][key] = 0
+        
         self.fill_template(value)
         self.template_to_l()
         self.set_up_down_label(logo_img, index=report_index)
         self.result.generate()
 
     def save_report(self, uid: int, record: Record):
-        logo_img = "D:/sitp_work/web/report/logo_img.png"
-        cover_img = record.field_img[0]
+        logo_img = "report/logo_img.png"
+        cover_img = record.field_img[0] if record.field_img else None
         client_name = "{}（委托人）".format(uid)  # TODO:数据库里根据uid查找用户名
 
         # TODO:后续处理
@@ -906,28 +952,44 @@ class property_report:
         # property_index = "【房地产权证】沪(2017)浦字不动产权第015342号"
         property_index = "【房地产权证】"
         print(record.production_ocr)
-        ocr_table = OCR_Table().trans_to_df(record.production_ocr)
-        if ocr_table is not None:
-            # 遍历所有单元格替换None
-            for i in range(len(ocr_table)):
-                if isinstance(ocr_table[i], list):  # 处理二维表格
-                    ocr_table[i] = [cell if cell is not None else "" for cell in ocr_table[i]]
-        else:  # 处理一维数据
-            ocr_table[i] = ocr_table[i] if ocr_table[i] is not None else ""
-        apppendix = {
-            "附录一": [record.map],
-            "附录二": record.production_cert_img,
-            "附录三": record.field_img
+        ocr_table = []
+        if record.production_ocr and os.path.exists(record.production_ocr):
+            try:
+                raw_ocr = OCR_Table().trans_to_df(record.production_ocr)
+                if raw_ocr:
+                    # 获取第一页数据
+                    ocr_table = raw_ocr[0] if isinstance(raw_ocr, list) else []
+                    # 遍历并清洗数据 (替换 None 为空字符)
+                    if isinstance(ocr_table, list):
+                        for i in range(len(ocr_table)):
+                            if isinstance(ocr_table[i], (list, tuple)):
+                                ocr_table[i] = [str(cell) if cell is not None else "" for cell in ocr_table[i]]
+            except Exception as e:
+                print(f"OCR表格转化失败: {str(e)}")
+        appendix = {
+            "附录一": [record.map] if record.map else [],
+            "附录二": record.production_cert_img if record.production_cert_img else [],
+            "附录三": record.field_img if record.field_img else []
         }
-        city_introduction, city_detail = MySQLManager().get_city_info(record.city)
-        city = (record.city, city_introduction, city_detail)
+        
+        # 获取城市信息 (防御逻辑)
+        try:
+            mgr = MySQLManager()
+            city_introduction, city_detail = mgr.get_city_info(record.city)
+            mgr.close()
+        except:
+            city_introduction, city_detail = None, None
+            
+        city = (record.city, 
+                city_introduction or f"{record.city}市是中国重要的中心城市之一。", 
+                city_detail or "区域内拥有完善的基础设施与良好的经济基础。")
         environment = environment_main(record.house_location,record.city)
         traffic = "评估物业交通便利，周边路网干线丰富，公交和出租车均可到达。\n\n评估物业坐落图请见附录1"
-        property_price = int(record.price * record.house_area)
+        property_price = int(record.price * (record.house_area if record.house_area else 0))
         report_index = f"No.{datetime.now().strftime('%Y%m%d%H%M%S')}"
         self.model_report(cover_img=cover_img, logo_img=logo_img, client_name=client_name,
                           property_summary=property_summary, property_index=property_index,
-                          ocr_table=ocr_table, appendix=apppendix, city=city, environment=environment,
+                          ocr_table=ocr_table, appendix=appendix, city=city, environment=environment,
                           traffic=traffic, property_price=property_price, property_size=str(record.house_area),
                           report_index=report_index)
 

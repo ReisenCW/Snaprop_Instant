@@ -81,12 +81,21 @@ class MySQLManager():
             introduction_query="SELECT city_introduction FROM city WHERE city_name=%s"
             self._cursor.execute(introduction_query, (city,))
             introduction = self._cursor.fetchone()
+            
             detail_query="SELECT detail FROM city WHERE city_name=%s"
             self._cursor.execute(detail_query, (city,))
             detail = self._cursor.fetchone()
-            return introduction[0], detail[0]
+            
+            # 增加对 None 的容错处理
+            res_intro = introduction[0] if introduction and introduction[0] else None
+            res_detail = detail[0] if detail and detail[0] else None
+            return res_intro, res_detail
         except mysql.connector.Error as err:
             print(f"Error: {err}")
+            return None, None
+        except Exception as e:
+            print(f"获取城市信息出错: {e}")
+            return None, None
 
     def get_comparable_cases(self, city, limit=10):
         """

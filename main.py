@@ -159,7 +159,7 @@ class PropertyValuationSystem:
         
         return estimation_result
     
-    def generate_report(self, property_data, estimation_result, target_property=None, price_prediction=None):
+    def generate_report(self, property_data, estimation_result, target_property=None, price_prediction=None, pdf_url=None):
         """
         生成房产估值报告
         
@@ -168,6 +168,7 @@ class PropertyValuationSystem:
             estimation_result: 估值结果
             target_property: 目标房产数据（可选）
             price_prediction: 房价预测数据（可选）
+            pdf_url: PDF文件的URL路径（可选）
             
         Returns:
             str: 报告文件路径
@@ -189,6 +190,7 @@ class PropertyValuationSystem:
             "target_property": target_property,
             "estimation_result": estimation_result,
             "price_prediction": price_prediction,
+            "pdf_url": pdf_url,
             "generated_at": timestamp,
             "report_id": f"REPORT_{timestamp}"
         }

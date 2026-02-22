@@ -20,12 +20,12 @@ class BaseAgent:
         )
         
         if stream:
-            print(f"[{self.__class__.__name__}] 开始推理...", flush=True)
+            # print(f"[{self.__class__.__name__}] 开始推理...", flush=True)
             full_content = ""
             for chunk in result_or_gen:
                 full_content += chunk
-                print(chunk, end="", flush=True)
-            print("\n")
+                # print(chunk, end="", flush=True)
+            # print("\n")
             result = full_content
         else:
             result = result_or_gen

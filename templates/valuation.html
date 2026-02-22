@@ -491,7 +491,7 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
     <!-- 估值结果 -->
     <div id="resultCard" class="card shadow-sm mb-4 result-card">
       <div class="card-header bg-success text-white">
-        <h5 class="card-title mb-0">房产估值详细报告</h5>
+        <h5 class="card-title mb-0">估值分析</h5>
       </div>
       <div class="card-body">
         <div class="result-header mb-4">
@@ -509,7 +509,7 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
 
           <!-- 第三行：置信度 -->
           <div class="text-center mb-3">
-            <h4 class="text-secondary fw-bold mb-2">评估置信度</h4>
+            <h4 class="text-secondary fw-bold mb-2">房产估值分析置信度</h4>
             <div class="d-flex flex-column align-items-center">
               <h2 class="fw-bold text-success mb-2" id="confidence">-</h2>
               <div class="progress w-50" style="height: 12px">
@@ -537,12 +537,23 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
 
         <div class="d-flex justify-content-center gap-3">
           <a
-            id="reportLink"
+            id="pdfReportBtn"
             href="#"
-            class="btn btn-primary px-5"
+            class="btn btn-primary px-4"
             target="_blank"
-            >导出完整评估报告 (PDF)</a
+            style="display: none;"
           >
+            <i class="bi bi-printer me-1"></i>打印房产评估报告
+          </a>
+          <a
+            id="onlineReportBtn"
+            href="#"
+            class="btn btn-primary px-4"
+            target="_blank"
+            style="display: none;"
+          >
+            <i class="bi bi-file-earmark-text me-1"></i>查看在线记录
+          </a>
           <button
             type="button"
             id="newValuationBtn"
@@ -846,7 +857,18 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
       cert_image: document.getElementById("certImagePath").value,
       property_photo: document.getElementById("propertyPhotoPath").value,
       description: document.getElementById("description").value,
-      version: version
+      version: version,
+      ocr_table: (function() {
+          const inputs = Array.from(document.querySelectorAll(".ocr-cell-input"));
+          let grid = [];
+          inputs.forEach(input => {
+              const r = parseInt(input.dataset.row);
+              const c = parseInt(input.dataset.col);
+              if(!grid[r]) grid[r] = [];
+              grid[r][c] = input.value || "";
+          });
+          return grid;
+      })()
     };
 
     // 如果是专业版，增加调整参数
@@ -1006,10 +1028,21 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
       document.getElementById("explanation").textContent = result.explanation;
 
       // 设置报告链接
+      if (result.pdf_url) {
+        const pBtn = document.getElementById("pdfReportBtn");
+        pBtn.href = result.pdf_url;
+        pBtn.style.display = "inline-block";
+      } else {
+        document.getElementById("pdfReportBtn").style.display = "none";
+      }
+
       if (result.report_path) {
+        const rBtn = document.getElementById("onlineReportBtn");
         const reportFilename = result.report_path.split("/").pop();
-        document.getElementById("reportLink").href =
-          "/report/" + reportFilename;
+        rBtn.href = "/report/" + reportFilename;
+        rBtn.style.display = "inline-block";
+      } else {
+        document.getElementById("onlineReportBtn").style.display = "none";
       }
 
       // 自动滚动到结果

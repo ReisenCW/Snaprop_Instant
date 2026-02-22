@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>估值报告列表 - 房估宝</title>
+    <title>估值历史记录 - 房估宝</title>
 </head>
 <body>
     {% extends "base.html" %}
 
-    {% block title %}估值报告列表 - 房估宝{% endblock %}
+    {% block title %}估值历史记录 - 房估宝{% endblock %}
 
     {% block content %}
     <div class="row">
         <div class="col-lg-10 mx-auto">
-            <h1 class="mb-4">估值报告列表</h1>
+            <h1 class="mb-4">估值历史记录</h1>
             
             {% if reports %}
             <div class="table-responsive">
@@ -50,8 +50,8 @@
             </div>
             {% else %}
             <div class="alert alert-info">
-                <h5>暂无估值报告</h5>
-                <p>请先进行房产估值，生成报告后即可在此查看。</p>
+                <h5>暂无估值记录</h5>
+                <p>请先进行房产估值，生成估值记录后即可在此查看。</p>
                 <a href="/valuation" class="btn btn-primary">开始估值</a>
             </div>
             {% endif %}
