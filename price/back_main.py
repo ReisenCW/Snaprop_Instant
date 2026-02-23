@@ -41,13 +41,13 @@ def trans_green_rate(str) -> float:
 
 def back_main(city, house_floor, house_area, house_type, house_decoration, house_year, house_structure,
               house_loc, selection_weights=None):  #TODO：入参数未设置，待粗筛加入后可以只设置前端传来的待估价房屋具体信息
-    selction_example = careful_selection(username=MySQLManager()._username, password=MySQLManager()._password,
+    selection_example = careful_selection(username=MySQLManager()._username, password=MySQLManager()._password,
                                          host=MySQLManager()._host, port=MySQLManager()._port,
                                          database=MySQLManager()._db, table=MySQLManager().get_table(city),
                                          house_floor=house_floor, house_area=house_area, house_type=house_type,
                                          house_decoration=house_decoration, house_year=house_year,
                                          house_structure=house_structure, house_loc=house_loc)
-    df = selction_example.selction()
+    df = selection_example.selection()
     if not df:
         return [], 0.0
     # print("精筛结果：")

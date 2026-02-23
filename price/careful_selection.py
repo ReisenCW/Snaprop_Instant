@@ -1,25 +1,40 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from sqlalchemy import create_engine
 import pandas as pd
 import re
-import time
-from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from typing import Dict, List, Any, Optional
 
 
 class careful_selection:
-    def __init__(self, username, password, host, port, database, table, house_floor, house_area, house_type,
-                 house_decoration, house_year, house_loc, selection_weights=None):
+    """Class to handle careful selection of comparable properties for valuation."""
+    
+    # Pre-defined mappings for categorical distinctions
+    FLOOR_MAP = {"低": 1, "中": 2, "高": 3}
+    DECO_MAP = {"毛坯": 0, "简装": 1, "精装": 2}
+    TYPE_PATTERN = re.compile(r'(\d+)室|(\d+)厅|(\d+)厨|(\d+)卫')
+
+    def __init__(self, username, password, host, port, database, table, 
+                 house_floor, house_area, house_type, house_decoration, 
+                 house_year, house_loc, selection_weights=None):
         self.table = table
-        self.house_floor = house_floor
-        self.house_area = house_area
-        self.house_type = house_type
-        self.house_decoration = house_decoration
-        self.house_year = house_year
+        self.target_floor = self._get_floor_level(house_floor)
+        self.target_area = float(house_area)
+        self.target_type_vec = self._parse_house_type(house_type)
+        self.target_decoration = self._get_deco_level(house_decoration)
+        self.target_year = int(house_year)
         self.house_loc = house_loc
-        self.today = time.strftime("%Y-%m-%d", time.localtime())
+        self.today = datetime.now()
         
-        # 默认权重
+        # Original values kept for SQL queries if needed
+        self.raw_house_floor = house_floor
+        self.raw_house_type = house_type
+        self.raw_house_decoration = house_decoration
+        self.raw_house_year = house_year
+        self.raw_house_area = house_area
+
+        # Weights for distinction calculation
         self.weights = selection_weights or {
             'floor': 0.15,
             'area': 0.25,
@@ -31,211 +46,130 @@ class careful_selection:
 
         uri = f"mysql+mysqlconnector://{username}:{password}@{host}:{port}/{database}"
         self.engine = create_engine(uri)
+    
+    def _get_floor_level(self, floor_str: str) -> int:
+        """Map floor description to numeric level."""
+        for key, val in self.FLOOR_MAP.items():
+            if key in str(floor_str):
+                return val
+        return 0
+
+    def _get_deco_level(self, deco_str: str) -> int:
+        """Map decoration description to numeric level."""
+        return self.DECO_MAP.get(deco_str, 0)
+
+    def _parse_house_type(self, type_str: str) -> np.ndarray:
+        """Extract (Room, Hall, Kitchen, Bathroom) vector from string."""
+        if not isinstance(type_str, str):
+            return np.zeros(4)
         
+        res = [0, 0, 0, 0]
+        # More robust extraction
+        matches = {
+            '室': 0, '厅': 1, '厨': 2, '卫': 3
+        }
+        for label, idx in matches.items():
+            m = re.search(rf'(\d+){label}', type_str)
+            if m:
+                res[idx] = int(m.group(1))
+        return np.array(res)
+
     @staticmethod
     def trans_green_rate(s) -> float:
         if not isinstance(s, str):
-            return 0
-        f = re.findall(r'\d+', s)
+            return 0.0
+        f = re.findall(r'\d+\.?\d*', s)
         if "%" in s and f:
-            return int(f[0]) / 100
-        return 0
+            return float(f[0]) / 100
+        return 0.0
 
-    def house_floor_distinction(self, floor1, floor2):
-        if "低" in floor1:
-            floor1 = "低"
-        elif "中" in floor1:
-            floor1 = "中"
-        elif "高" in floor1:
-            floor1 = "高"
-        if "低" in floor2:
-            floor2 = "低"
-        elif "中" in floor2:
-            floor2 = "中"
-        elif "高" in floor2:
-            floor2 = "高"
-
-        if (floor1 == "低" and floor2 == "低") or (floor1 == "中" and floor2 == "中") or (
-                floor1 == "高" and floor2 == "高"):
-            return 0
-        elif (floor1 == "低" and floor2 == "中") or (floor1 == "中" and floor2 == "低") or (
-                floor1 == "中" and floor2 == "高") or (floor1 == "高" and floor2 == "中"):
-            return 1
-        elif (floor1 == "低" and floor2 == "高") or (floor1 == "高" and floor2 == "低"):
-            return 2
-        return 3
-
-    def house_area_distinction(self, area1, area2):
-        return abs(area1 - area2)
-
-    def house_type_distinction(self, type1, type2):
-        w_room = 1
-        w_hall = 1
-        w_bathroom = 1
-        w_kitchen = 1
-
-        pattern = r'(\d+)室(\d+)厅(\d+)厨(\d+)卫'
-        match1 = re.search(pattern, type1)
-        match2 = re.search(pattern, type2)
-        
-        if not match1 or not match2:
-            # 如果格式不匹配，返回最大差异
-            return 10
-        
-        room1, hall1, kitchen1, bathroom1 = int(match1.group(1)), int(match1.group(2)), int(match1.group(3)), int(match1.group(4))
-        room2, hall2, kitchen2, bathroom2 = int(match2.group(1)), int(match2.group(2)), int(match2.group(3)), int(match2.group(4))
-        return w_room * abs(room1 - room2) + w_hall * abs(hall1 - hall2) + w_bathroom * abs(bathroom1 - bathroom2) + w_kitchen * abs(kitchen1 - kitchen2)
-
-    def house_decorating_distinction(self, decoration1, decoration2):
-        if (decoration1 == "毛坯" and decoration2 == "毛坯") or (decoration1 == "简装" and decoration2 == "简装") or (
-                decoration1 == "精装" and decoration2 == "精装"):
-            return 0
-        elif (decoration1 == "毛坯" and decoration2 == "简装") or (decoration1 == "简装" and decoration2 == "毛坯") or (
-                decoration1 == "简装" and decoration2 == "精装") or (decoration1 == "精装" and decoration2 == "简装"):
-            return 1
-        elif (decoration1 == "毛坯" and decoration2 == "精装") or (decoration1 == "精装" and decoration2 == "毛坯"):
-            return 2
-        return 3
-
-    def house_year_distinction(self, year1, year2):
-        return abs(int(year1) - int(year2))
-
-    def transaction_time_distinction(self, date1, date2):
-        date1 = datetime.strptime(date1, "%Y-%m-%d")
-        date2 = datetime.strptime(date2, "%Y-%m-%d")
-        return abs(date1 - date2).days
-
-    def selction(self) -> list:
+    def selection(self) -> List[Dict[str, Any]]:
+        """Main selection logic with tiered strategy and vectorized distance calculation."""
         try:
-            # 基础小区名处理（去除括号内容，如"仁恒森兰雅苑(一期)" -> "仁恒森兰雅苑"）
+            # 1. Tiered Retrieval Strategy
             base_loc = self.house_loc.split('(')[0] if self.house_loc else ""
-            
-            # 定义分级筛选策略
-            strategies = [
-                # Level 1: 精确匹配 (同小区, 面积差异<15%, 房龄差异<5年)
-                {
-                    "name": "精确匹配",
-                    "area_diff_ratio": 0.15,
-                    "year_diff": 5,
-                    "loc_strict": True
-                },
-                # Level 2: 同小区宽泛匹配 (同小区, 面积差异<30%, 房龄差异<10年)
-                {
-                    "name": "同小区宽泛匹配",
-                    "area_diff_ratio": 0.30,
-                    "year_diff": 10,
-                    "loc_strict": True
-                },
-                # Level 3: 兜底匹配 (地址模糊匹配, 面积差异<50平米, 房龄差异<15年)
-                {
-                    "name": "兜底匹配",
-                    "area_diff_fixed": 50,
-                    "year_diff": 15,
-                    "loc_strict": False
-                }
-            ]
-            
-            df = pd.DataFrame()
-            
-            for strategy in strategies:
-                conditions = []
-                
-                # 1. 地址条件
-                if strategy['loc_strict']:
-                    if base_loc:
-                        # 精确模式：必须包含小区名
-                        conditions.append(f"house_loc LIKE '%%{base_loc}%%'")
-                    else:
-                        conditions.append("1=1")
-                else:
-                    # 宽松模式：如果不强求小区匹配，完全忽略地址，让其他条件生效
-                    conditions.append("1=1")
-                
-                # 2. 房龄条件
-                conditions.append(f"ABS(CAST(house_year AS SIGNED) - {self.house_year}) <= {strategy['year_diff']}")
-                
-                # 3. 面积条件
-                if 'area_diff_ratio' in strategy:
-                    area_diff = float(self.house_area) * strategy['area_diff_ratio']
-                    conditions.append(f"ABS(house_area - {self.house_area}) <= {area_diff}")
-                else:
-                    conditions.append(f"ABS(house_area - {self.house_area}) <= {strategy['area_diff_fixed']}")
-                
-                where_clause = " AND ".join(conditions)
-                query = f"SELECT * FROM {self.table} WHERE {where_clause}"
-                
-                temp_df = pd.read_sql(query, self.engine)
-                
-                # 如果找到足够数量的案例（例如至少3个），则停止
-                if not temp_df.empty and len(temp_df) >= 3:
-                    df = temp_df
-                    msg = f"找到 {len(df)} 个案例进行IMCA估值"
-                    print(msg)
-                    self.last_strategy_msg = msg
-                    break
+            df = self._retrieve_data(base_loc)
             
             if df.empty:
-                self.last_strategy_msg = "所有策略均未找到符合条件的案例"
-                print(self.last_strategy_msg)
+                print("No comparable cases found after all strategies.")
                 return []
             
-            # 数据清理
-            features = ['house_floor', 'house_area', 'house_type', 'house_decoration', 'house_year', 'transaction_time']
-            df = df[~df[features].apply(lambda row: row.astype(str).str.contains('暂无数据|未知')).any(axis=1)]
+            # 2. Vectorized Cleaning and Pre-processing
+            # Remove "Unknown" or "N/A" values for critical features
+            mask = ~df[['house_floor', 'house_area', 'house_type', 'house_decoration', 'house_year']].astype(str).apply(
+                lambda x: x.str.contains('暂无数据|未知|None|nan', case=False)
+            ).any(axis=1)
+            df = df[mask].copy()
             
             if df.empty:
-                print("数据清理后没有有效案例")
+                print("No valid cases remaining after data cleaning.")
                 return []
-            
-            df['house_year'] = df['house_year'].replace('未知', np.nan)
-            if not df['house_year'].dropna().empty:
-                mean_value = int(df['house_year'].dropna().astype(int).mean())
-                df['house_year'] = df['house_year'].replace(np.nan, mean_value)
-            df['house_year'] = df['house_year'].astype(int)
-            
-            # 计算区别度
-            df['house_floor_distinction'] = df['house_floor'].apply(
-                lambda x: self.house_floor_distinction(x, self.house_floor))
-            df['house_area_distinction'] = df['house_area'].apply(
-                lambda x: self.house_area_distinction(x, float(self.house_area)))
-            df['house_type_distinction'] = df['house_type'].apply(
-                lambda x: self.house_type_distinction(x, self.house_type))
-            df['house_decorating_distinction'] = df['house_decoration'].apply(
-                lambda x: self.house_decorating_distinction(x, self.house_decoration))
-            df['house_year_distinction'] = df['house_year'].apply(
-                lambda x: self.house_year_distinction(x, int(self.house_year)))
-            df['transaction_time_distinction'] = df['transaction_time'].apply(
-                lambda x: self.transaction_time_distinction(x, self.today))
 
-            # 标准化
-            scaler = MinMaxScaler()
-            columns_to_scale = ['house_floor_distinction', 'house_area_distinction', 'house_type_distinction',
-                                'house_decorating_distinction', 'house_year_distinction',
-                                'transaction_time_distinction']
-            if not df.empty:
-                scaled_data = scaler.fit_transform(df[columns_to_scale])
-                df[columns_to_scale] = scaled_data
+            # 3. Calculate Normalized Distances (Distinction)
+            # Use vectorized operations where possible for performance
+            df['d_floor'] = df['house_floor'].apply(self._get_floor_level).apply(
+                lambda x: abs(x - self.target_floor) if x and self.target_floor else 3
+            )
+            df['d_area'] = (df['house_area'].astype(float) - self.target_area).abs()
             
-            # 加权综合区别度
-            df['distinction'] = (
-                self.weights['floor'] * df['house_floor_distinction'] +
-                self.weights['area'] * df['house_area_distinction'] +
-                self.weights['type'] * df['house_type_distinction'] +
-                self.weights['decoration'] * df['house_decorating_distinction'] +
-                self.weights['year'] * df['house_year_distinction'] +
-                self.weights['time'] * df['transaction_time_distinction']
+            # Type vector distance
+            df['d_type'] = df['house_type'].apply(lambda x: np.sum(np.abs(self._parse_house_type(x) - self.target_type_vec)))
+            
+            df['d_deco'] = df['house_decoration'].apply(self._get_deco_level).apply(
+                lambda x: abs(x - self.target_decoration)
             )
             
-            # 转换绿化率
+            df['d_year'] = pd.to_numeric(df['house_year'], errors='coerce').fillna(self.target_year).apply(
+                lambda x: abs(int(x) - self.target_year)
+            )
+            
+            # Time distance in days
+            df['d_time'] = pd.to_datetime(df['transaction_time'], errors='coerce').apply(
+                lambda x: abs((self.today - x).days) if pd.notnull(x) else 365
+            )
+
+            # 4. Scaling and Weighting
+            cols = ['d_floor', 'd_area', 'd_type', 'd_deco', 'd_year', 'd_time']
+            scaler = MinMaxScaler()
+            df[cols] = scaler.fit_transform(df[cols])
+            
+            df['distinction'] = (
+                self.weights['floor'] * df['d_floor'] +
+                self.weights['area'] * df['d_area'] +
+                self.weights['type'] * df['d_type'] +
+                self.weights['decoration'] * df['d_deco'] +
+                self.weights['year'] * df['d_year'] +
+                self.weights['time'] * df['d_time']
+            )
+
+            # Cleanup and sort
             if 'green_rate' in df.columns:
                 df['green_rate'] = df['green_rate'].apply(self.trans_green_rate)
-
-            df = df.sort_values(by='distinction')
             
-            return df[:5].to_dict(orient='records')
-        
+            return df.sort_values('distinction').head(5).to_dict(orient='records')
+
         except Exception as e:
-            print(f"精筛过程中出错: {str(e)}")
+            print(f"Error in careful selection: {e}")
             import traceback
             traceback.print_exc()
             return []
+
+    def _retrieve_data(self, base_loc: str) -> pd.DataFrame:
+        """Implements the multi-level search strategy."""
+        strategies = [
+            # T1: Same community, tight constraints
+            {"sql": f"SELECT * FROM {self.table} WHERE house_loc LIKE '%%{base_loc}%%' AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.15} AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 5"},
+            # T2: Same community, relaxed constraints
+            {"sql": f"SELECT * FROM {self.table} WHERE house_loc LIKE '%%{base_loc}%%' AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.3} AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 10"},
+            # T3: Neighborhood/Wider area (if base_loc is specific)
+            {"sql": f"SELECT * FROM {self.table} WHERE ABS(house_area - {self.target_area}) <= 50 AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 15"}
+        ]
+        
+        for strategy in strategies:
+            try:
+                df = pd.read_sql(strategy['sql'], self.engine)
+                if len(df) >= 3:
+                    return df
+            except Exception:
+                continue
+        return pd.DataFrame()

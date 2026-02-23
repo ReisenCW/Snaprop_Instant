@@ -34,6 +34,46 @@
         border-radius: 4px;
         background-color: #f1f3f5;
       }
+
+      /* Markdown Table & Content Styling */
+      .markdown-content {
+        overflow-x: auto;
+        max-width: 100%;
+      }
+      .markdown-content table {
+        width: 100%;
+        min-width: 1000px;
+        border-collapse: collapse;
+        margin-bottom: 1rem;
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        font-size: 0.95rem;
+      }
+      .markdown-content th,
+      .markdown-content td {
+        padding: 0.75rem;
+        vertical-align: top;
+        border: 1px solid #dee2e6;
+      }
+      .markdown-content th {
+        background-color: #f8f9fa;
+        font-weight: bold;
+      }
+      .markdown-content h3,
+      .markdown-content h4 {
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+        font-weight: 700;
+        color: #333;
+      }
+      .markdown-content blockquote {
+        padding: 0.5rem 1rem;
+        color: #6c757d;
+        border-left: 0.25rem solid #dee2e6;
+        margin-bottom: 1rem;
+        font-style: italic;
+      }
+
       .card-body img {
         cursor: pointer;
         transition: transform 0.2s;
@@ -173,7 +213,10 @@
                   <i class="bi bi-graph-up pe-2"></i>市场比较法分析
                 </h4>
               </div>
-              <div class="explanation-text px-3" style="white-space: pre-line">
+              <div
+                class="explanation-text markdown-content px-3"
+                data-content="{{ parts[0].strip() }}"
+              >
                 {{ parts[0].strip() }}
               </div>
             </div>
@@ -186,7 +229,10 @@
                   <i class="bi bi-arrow-up-right-circle pe-2"></i>市场趋势调整
                 </h4>
               </div>
-              <div class="explanation-text px-3" style="white-space: pre-line">
+              <div
+                class="explanation-text markdown-content px-3"
+                data-content="{{ parts[1].strip() }}"
+              >
                 {{ parts[1].strip() }}
               </div>
             </div>
@@ -199,7 +245,10 @@
                   <i class="bi bi-graph-up pe-2"></i>市场比较法分析
                 </h4>
               </div>
-              <div class="explanation-text px-3" style="white-space: pre-line">
+              <div
+                class="explanation-text markdown-content px-3"
+                data-content="{{ explanation.strip() }}"
+              >
                 {{ explanation.strip() }}
               </div>
             </div>
@@ -288,8 +337,18 @@
       </div>
     </div>
     {% endblock %} {% block extra_js %}
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
+        // 渲染 Markdown
+        const mdContainers = document.querySelectorAll(".markdown-content");
+        mdContainers.forEach((container) => {
+          const rawContent = container.getAttribute("data-content");
+          if (rawContent && typeof marked !== "undefined") {
+            container.innerHTML = marked.parse(rawContent);
+          }
+        });
+
         const viewerModalEl = document.getElementById("imageViewerModal");
         const enlargedImg = document.getElementById("enlargedImage");
 

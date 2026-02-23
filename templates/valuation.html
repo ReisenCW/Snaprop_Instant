@@ -89,6 +89,41 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
       transform: rotate(360deg);
     }
   }
+
+  /* Markdown Table Styling */
+  #explanation {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  #explanation table {
+    width: 100%;
+    min-width: 1000px; /* 强制产生横向滚动条以容纳多列数据 */
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+  }
+  #explanation th, #explanation td {
+    padding: 0.75rem;
+    vertical-align: top;
+    border: 1px solid #dee2e6;
+  }
+  #explanation th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+  }
+  #explanation h3, #explanation h4 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 700;
+  }
+  #explanation blockquote {
+    padding: 0.5rem 1rem;
+    color: #6c757d;
+    border-left: 0.25rem solid #dee2e6;
+    margin-bottom: 1rem;
+    font-style: italic;
+  }
 </style>
 {% endblock %} {% block content %}
 <div class="row">
@@ -570,13 +605,13 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
 
         <h5>估值深度分析</h5>
         <div class="bg-light p-4 rounded mb-4">
-          <p
+          <div
             id="explanation"
             class="mb-0"
-            style="white-space: pre-line; line-height: 1.8; font-size: 1.1rem"
+            style="line-height: 1.8; font-size: 1.1rem"
           >
             -
-          </p>
+          </div>
         </div>
 
         <div class="d-flex justify-content-center gap-3">
@@ -654,6 +689,7 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 <script>
   let currentCropper = null;
@@ -1079,7 +1115,12 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
         confidence.toFixed(2) + "%";
       document.getElementById("confidenceBar").style.width = confidence + "%";
 
-      document.getElementById("explanation").textContent = result.explanation;
+      // 渲染 Markdown
+      if (typeof marked !== 'undefined') {
+          document.getElementById("explanation").innerHTML = marked.parse(result.explanation);
+      } else {
+          document.getElementById("explanation").textContent = result.explanation;
+      }
 
       // 设置报告链接
       if (result.pdf_url) {

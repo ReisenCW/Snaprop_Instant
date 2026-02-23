@@ -447,7 +447,7 @@ def api_valuation():
                     
                     house_loc = data.get('address', '')
                     
-                    selction_example = careful_selection(
+                    selection_example = careful_selection(
                         username=mysql_manager._username,
                         password=mysql_manager._password,
                         host=mysql_manager._host,
@@ -462,10 +462,10 @@ def api_valuation():
                         house_loc=house_loc
                     )
                     
-                    df = selction_example.selction()
+                    df = selection_example.selection()
                     
-                    if hasattr(selction_example, 'last_strategy_msg'):
-                        yield json.dumps({"status": "progress", "stage": "estimate", "message": f"{selction_example.last_strategy_msg}，正在计算估值..."}) + "\n"
+                    if hasattr(selection_example, 'last_strategy_msg'):
+                        yield json.dumps({"status": "progress", "stage": "estimate", "message": f"{selection_example.last_strategy_msg}，正在计算估值..."}) + "\n"
 
                     if df:
                         comparable_cases = []
@@ -497,6 +497,7 @@ def api_valuation():
                                 'transaction_time': str(i['transaction_time']),
                                 'green_rate': green_val,
                                 'address': i['house_loc'],
+                                'house_type': i.get('house_type', '-'),
                                 'transaction_type': 1
                             }
                             comparable_cases.append(case)
