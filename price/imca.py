@@ -83,8 +83,10 @@ class IMCA:
             target['age'] = current_year - target['built_year']
         elif 'built_time' in target:
             try:
-                built_year = datetime.strptime(target['built_time'], '%Y-%m-%d').year
-                target['age'] = current_year - built_year
+                # Handle both "2015-01-01" and "2015"
+                time_str = str(target['built_time'])
+                built_year = int(time_str.split('-')[0])
+                target['age'] = max(0, current_year - built_year)
             except:
                 target['age'] = 0
         
@@ -93,8 +95,9 @@ class IMCA:
                 case['age'] = current_year - case['built_year']
             elif 'built_time' in case:
                 try:
-                    built_year = datetime.strptime(case['built_time'], '%Y-%m-%d').year
-                    case['age'] = current_year - built_year
+                    time_str = str(case['built_time'])
+                    built_year = int(time_str.split('-')[0])
+                    case['age'] = max(0, current_year - built_year)
                 except:
                     case['age'] = 0
             

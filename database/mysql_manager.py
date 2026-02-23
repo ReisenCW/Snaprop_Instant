@@ -21,95 +21,125 @@ class MySQLManager():
         self._username = mysql_username
         self._password = mysql_password
         self._db = mysql_db
-        self._connection = mysql.connector.connect(
-            host=self._host,
-            port=self._port,
-            user=self._username,
-            password=self._password,
-            database=self._db
-        )
-        self._cursor = self._connection.cursor()
+        self._connection = None
+        self._cursor = None
+        self._connect()
+
+    def _connect(self):
+        """建立数据库连接"""
+        try:
+            if self._connection and self._connection.is_connected():
+                return
+            self._connection = mysql.connector.connect(
+                host=self._host,
+                port=self._port,
+                user=self._username,
+                password=self._password,
+                database=self._db
+            )
+            self._cursor = self._connection.cursor()
+        except mysql.connector.Error as err:
+            print(f"数据库连接失败: {err}")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        self.close()
 
     def close(self):
+        """关闭数据库资源"""
         if self._cursor:
             self._cursor.close()
+            self._cursor = None
         if self._connection:
-            self._connection.close()
+            if self._connection.is_connected():
+                self._connection.close()
+            self._connection = None
 
     def get_cursor(self):
-        self._connection = mysql.connector.connect(
-            host=self._host,
-            port=self._port,
-            user=self._username,
-            password=self._password,
-            database=self._db
-        )
-        self._cursor = self._connection.cursor()
+        """获取游标，确保连接处于活动状态"""
+        self._connect()
         return self._cursor
 
     def get_table(self, city):
-        table_name = self.city_tables[city]
-        return table_name
+        return self.city_tables.get(city)
 
     def insert(self, city, filepath):
-        table_name = self.get_table(city)
-        df = pd.read_excel(filepath)
-        insert_query = f"""
-        INSERT INTO {table_name} (house_type,house_floor,house_direction,house_area,house_structure,transaction_type,transaction_time,house_decoration,is_elevator,house_year,green_rate,house_loc,house_position,u_price,t_price,detail_url)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s,%s, %s, %s, %s,%s, %s, %s, %s)
         """
-        df['transaction_time'] = pd.to_datetime(df['transaction_time']).dt.strftime('%Y-%m-%d')
-        for _, row in df.iterrows():
-            try:
-                house_year = row['house_year']
-                if pd.isna(house_year) or str(house_year).strip() in ['未知', '']:
-                    house_year = None
+        批量插入城市房产数据
+        """
+        table_name = self.get_table(city)
+        if not table_name:
+            print(f"未知城市: {city}")
+            return
 
-                self._cursor.execute(insert_query, (
+        try:
+            df = pd.read_excel(filepath)
+            # 处理日期格式
+            if 'transaction_time' in df.columns:
+                df['transaction_time'] = pd.to_datetime(df['transaction_time']).dt.strftime('%Y-%m-%d')
+            
+            # 处理 NaN 和 空字符串
+            df = df.where(pd.notnull(df), None)
+            df.replace('未知', None, inplace=True)
+            df.replace('', None, inplace=True)
+
+            # 插入查询
+            insert_query = f"""
+            INSERT INTO {table_name} 
+            (house_type, house_floor, house_direction, house_area, house_structure, 
+             transaction_type, transaction_time, house_decoration, is_elevator, 
+             house_year, green_rate, house_loc, house_position, u_price, t_price, detail_url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+
+            # 准备数据元组列表
+            data_to_insert = [
+                (
                     row['house_type'], row['house_floor'], row['house_direction'], row['house_area'],
                     row['house_structure'], row['transaction_type'], row['transaction_time'], row['house_decoration'],
-                    row['is_elevator'], house_year, row['green_rate'], row['house_loc'], row['house_position'],
-                    row['u_price'], row['t_price'], row['detail_url']))
-                self._connection.commit()  # 提交事务
-            except mysql.connector.Error as err:
-                print(f"Error: {err}")
-                self._connection.rollback()  # 回滚事务
-        print("数据插入完成！")
+                    row['is_elevator'], row['house_year'], row['green_rate'], row['house_loc'], row['house_position'],
+                    row['u_price'], row['t_price'], row['detail_url']
+                ) for _, row in df.iterrows()
+            ]
+
+            # 批量执行
+            self._cursor.executemany(insert_query, data_to_insert)
+            self._connection.commit()
+            print(f"数据插入完成！共计 {len(data_to_insert)} 条数据。")
+
+        except Exception as err:
+            if self._connection:
+                self._connection.rollback()
+            print(f"数据插入失败: {err}")
 
     def get_city_info(self, city):
+        """
+        获取城市信息（合并查询优化）
+        """
         try:
-            introduction_query="SELECT city_introduction FROM city WHERE city_name=%s"
-            self._cursor.execute(introduction_query, (city,))
-            introduction = self._cursor.fetchone()
+            query = "SELECT city_introduction, detail FROM city WHERE city_name=%s"
+            self._cursor.execute(query, (city,))
+            result = self._cursor.fetchone()
             
-            detail_query="SELECT detail FROM city WHERE city_name=%s"
-            self._cursor.execute(detail_query, (city,))
-            detail = self._cursor.fetchone()
-            
-            # 增加对 None 的容错处理
-            res_intro = introduction[0] if introduction and introduction[0] else None
-            res_detail = detail[0] if detail and detail[0] else None
-            return res_intro, res_detail
-        except mysql.connector.Error as err:
-            print(f"Error: {err}")
+            if result:
+                return result[0], result[1]
             return None, None
-        except Exception as e:
-            print(f"获取城市信息出错: {e}")
+            
+        except mysql.connector.Error as err:
+            print(f"获取城市信息失败: {err}")
             return None, None
 
     def get_comparable_cases(self, city, limit=10):
         """
-        获取可比案例数据
-        
-        Args:
-            city: 城市名
-            limit: 返回记录数量限制
-            
-        Returns:
-            list: 可比案例列表
+        获取可比案例数据，优化性能和默认值处理
         """
+        table_name = self.get_table(city)
+        if not table_name:
+            return []
+
         try:
-            table_name = self.get_table(city)
             query = f"""
             SELECT u_price, house_area, house_floor, house_decoration, house_year, 
                    transaction_time, green_rate, house_loc
@@ -123,15 +153,27 @@ class MySQLManager():
             
             comparable_cases = []
             for row in results:
+                # 解析 green_rate，处理可能出现的百分号或 None
+                green_rate_raw = row[6]
+                if isinstance(green_rate_raw, str) and '%' in green_rate_raw:
+                    green_rate = float(green_rate_raw.strip('%')) / 100
+                elif green_rate_raw:
+                    try:
+                        green_rate = float(green_rate_raw)
+                    except (ValueError, TypeError):
+                        green_rate = 0.3
+                else:
+                    green_rate = 0.3
+
                 case = {
-                    'price': float(row[0]),  # u_price
-                    'size': float(row[1]),   # house_area
-                    'floor': row[2] if row[2] else '中楼层',  # house_floor
-                    'fitment': row[3] if row[3] else '简装',   # house_decoration
-                    'built_time': f"{row[4]}-01-01" if row[4] else "2015",  # house_year
-                    'transaction_time': str(row[5]) if row[5] else "2023",  # transaction_time
-                    'green_rate': float(row[6].strip('%')) / 100 if row[6] and '%' in row[6] else (float(row[6]) if row[6] else 0.3),  # green_rate
-                    'address': row[7] if row[7] else '未知地址',  # house_loc
+                    'price': float(row[0]) if row[0] is not None else 0.0,
+                    'size': float(row[1]) if row[1] is not None else 0.0,
+                    'floor': row[2] if row[2] else '中楼层',
+                    'fitment': row[3] if row[3] else '简装',
+                    'built_time': str(row[4]) if row[4] else "2015",
+                    'transaction_time': str(row[5]) if row[5] else "2023",
+                    'green_rate': green_rate,
+                    'address': row[7] if row[7] else '未知地址',
                     'transaction_type': 1
                 }
                 comparable_cases.append(case)
@@ -141,17 +183,8 @@ class MySQLManager():
             print(f"获取可比案例失败: {err}")
             return []
 
+
     @property
     def host(self):
         return self._host
 
-
-if __name__ == '__main__':
-    mysql_manager = MySQLManager()
-
-    # print(mysql_manager.get_table("上海"))
-
-    filepath = "D:/sitp_work/data/森兰明轩.xlsx"
-    mysql_manager.insert("上海", filepath)
-
-    # mysql_manager.get_city_info("上海")

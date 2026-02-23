@@ -345,39 +345,21 @@ class PDFGenerator:
                   wrap_cols=None, row_heights=None, font_size=10, align='left', font_name='SimSun', factor=1.2):
         """
         添加表格
-        :param data: 表格数据
-        :param page_number: 页码
-        :param x: x坐标（cm）
-        :param y: y坐标（cm）
-        :param width: 表格总宽度（cm）
-        :param table_styles: 表格样式
-        :param col_widths: 列宽列表（cm）
-        :param wrap_cols: 需要换行的列索引
-        :param row_heights: 行高列表（cm）
-        :param font_size: 字体大小
-        :param align: 对齐方式 ('left', 'center', 'right')
-        :param font_name: 字体名称
-        :param auto_next_page: 是否自动移动到下一页
-        :param factor: 表格间隙
         :return: 表格实际高度（cm）
         """
         # 转换列宽和行高为点数
         if not col_widths:
-            col_widths = self._calculate_optimal_widths(data, width, font_name, font_size)
+            col_widths = self._calculate_optimal_widths(data, width * cm, font_name, font_size)
+        else:
+            col_widths = [w * cm for w in col_widths]
+            
         # 创建表格元素
         element = TableElement(data, page_number, x, y, width, table_styles, col_widths,
                                wrap_cols, row_heights, font_size, align, font_name, factor)
-        # 创建临时画布来计算高度
-        from reportlab.pdfgen import canvas
-        import tempfile
-        temp_file = tempfile.NamedTemporaryFile(delete=False)
-        temp_canvas = canvas.Canvas(temp_file.name)
-        # 计算表格高度
-        table_height = self._draw_table(temp_canvas, element, dry_run=True)
-        # 清理临时文件
-        temp_file.close()
-        import os
-        os.unlink(temp_file.name)
+        
+        # 直接计算高度，避免创建临时文件
+        table_height = self._get_table_height(element)
+        
         # 添加表格元素到列表
         self.elements.append(element)
         # 返回表格高度（转换为厘米）
@@ -388,24 +370,62 @@ class PDFGenerator:
         # 转换列宽和行高为点数
         if not col_widths:
             col_widths = self._calculate_optimal_widths(data, width * cm, font_name, font_size)
+        else:
+            col_widths = [w * cm for w in col_widths]
+            
         # 创建表格元素
         element = TableElement(data, page_number, x, y, width, table_styles, col_widths,
                                wrap_cols, row_heights, font_size, align, font_name, factor)
-        # 创建临时画布来计算高度
-        from reportlab.pdfgen import canvas
-        import tempfile
-        temp_file = tempfile.NamedTemporaryFile(delete=False)
-        temp_canvas = canvas.Canvas(temp_file.name)
-        # 计算表格高度
-        table_height = self._draw_table(temp_canvas, element, dry_run=True)
-        # 清理临时文件
-        temp_file.close()
-        import os
-        os.unlink(temp_file.name)
-        # 添加表格元素到列表
+        
+        # 直接计算高度
+        table_height = self._get_table_height(element)
+        
+        # 更新表格元素
         self.elements[index] = element
         # 返回表格高度（转换为厘米）
         return table_height / cm
+
+    def _get_table_height(self, element):
+        """仅用于计算表格高度，不进行实际绘制"""
+        styles = getSampleStyleSheet()
+        cell_style = ParagraphStyle(
+            'CellStyle',
+            parent=styles['Normal'],
+            wordWrap='CJK',
+            fontSize=element.font_size,
+            fontName=element.font_name,
+            alignment={'left': 0, 'center': 1, 'right': 2}[element.align],
+            leading=element.font_size * element.factor
+        )
+        
+        processed_data = []
+        max_cols = 0
+        if element.content:
+            for row in element.content:
+                if isinstance(row, (list, tuple)):
+                    max_cols = max(max_cols, len(row))
+
+        for row in element.content:
+            processed_row = []
+            if not isinstance(row, (list, tuple)):
+                continue
+            for col_idx in range(max_cols):
+                cell = row[col_idx] if col_idx < len(row) else ""
+                cell = cell if cell is not None else ""
+                if element.wrap_cols and col_idx in element.wrap_cols:
+                    cell = Paragraph(str(cell), cell_style)
+                processed_row.append(cell)
+            processed_data.append(processed_row)
+            
+        if not processed_data:
+            return 0
+            
+        table = Table(processed_data, colWidths=element.col_widths, 
+                      rowHeights=element.row_heights)
+        table.setStyle(element.table_styles)
+        # 使用 dummy canvas 只需要计算高度
+        w, h = table.wrap(element.width * cm if hasattr(element, 'width') and element.width else 1000, 10000)
+        return h
 
     def add_line(self, page_number, start_x, start_y, end_x, end_y,
                  line_width=0.1, line_color=colors.black, dash_pattern=None):
@@ -595,19 +615,21 @@ class property_report:
             },
         }  # 房产估价模板
 
-    #填充模板，可以整个填，也可以修改单个
     def fill_template(self, value, key1=None, key2=None):
-        if key1 == None and key2 == None:
-            assert type(value) == dict, type(value)
+        """
+        填充模板内容
+        :param value: 填入的值
+        :param key1: 第一级键
+        :param key2: 第二级键
+        """
+        if key1 is None:
+            if not isinstance(value, dict):
+                raise ValueError("若无 key1，value 必须为字典类型")
             self.template = value
-        if key1 != None:
-            if key2 == None:
-                # assert type(value)== dict,type(value)
-                self.template[key1] = value
-            else:
-                assert type(value) == str, type(value)
-                self.template[key1][key2] = value
-        pass
+        elif key2 is None:
+            self.template[key1] = value
+        else:
+            self.template[key1][key2] = value
 
     # 以下函数开始，体现模板各个参数，有些作为接口，有些写死在函数内部
     # 添加封面
@@ -659,213 +681,183 @@ class property_report:
                                  end_x=91 * self.width / 100, end_y=self.height / 15 + size / cm * 1.2,
                                  line_width=0.02, page_number=i)
 
-    # 载入模板，
     def template_to_l(self):
-        page_n = 2  # 页数，封面已经加入
-        start_x = self.width / 10  # 起始位置
-        start_y = 85 * self.height / 100  # 起始位置
-        body_width = self.width - 2 * start_x  # 主体宽度
-        y = start_y  # 当前行
-        title_size = 16  # 标题字号
-        subtitle1_size = 14  # 副标题1字号
-        subtitle2_size = 12  # 副标题2字号
-        content_size = 11  # 内容字号
-        subtitle_width = 6  # 副标题宽度（字数）
-        content_width = 34  # 内容宽度（字数）
-        content_page = 0  # 菜单页码
-        min_y = 2 * self.height / 15  # 主体内容可以达到最低处
+        """将模板字典转换为 PDF 元素列表"""
+        page_n = 2  # 封面页之后开始
+        start_x = self.width / 10
+        start_y = 85 * self.height / 100
+        y = start_y
+        
+        # 定义字号和布局常量
+        title_size, sub2_size, content_size = 16, 12, 11
+        subtitle_width, content_width = 6, 34
+        min_y = 2 * self.height / 15
+        content_page = 0
+
         for key in self.template:
-            if key == "敬启者：" or key == "主旨：":
-                assert self.template[key] != ""
-                self.result.add_text(text=key + self.template[key], x=start_x, y=y,
-                                     page_number=2, font_name="SimHei", font_size=subtitle2_size)
-                y -= subtitle2_size / cm * 2.2
+            # 1. 直接文本渲染项
+            if key in ["敬启者：", "主旨："]:
+                if self.template[key]:
+                    self.result.add_text(text=key + self.template[key], x=start_x, y=y,
+                                         page_number=2, font_name="SimHei", font_size=sub2_size)
+                    y -= sub2_size / cm * 2.2
+                continue
+
+            # 2. 附录渲染容器
             elif key == "__附录":
-                for key2 in self.template[key]:
-                    self.result.add_text(text=str(key2), x=self.width / 2 - len(key2) / 2 * title_size / cm, y=y,
+                for app_title, img_list in self.template[key].items():
+                    self.result.add_text(text=str(app_title), x=self.width / 2 - len(app_title) / 2 * title_size / cm, y=y,
                                          page_number=page_n, font_size=title_size)
                     y -= title_size / cm * 1.3
-                    self.template["目录"][key2] = page_n
-                    for img in self.template[key][key2]:
+                    self.template["目录"][app_title] = page_n
+                    
+                    for img in img_list:
                         if not img or not os.path.exists(img):
-                            print(f"Skipping missing image: {img}")
                             continue
-                        try:
-                            reader = ImageReader(img)
-                            width, height = reader.getSize()
-                        except Exception as e:
-                            print(f"Error reading image {img}: {e}")
-                            continue
+                        y, page_n = self._draw_appendix_image(img, start_x, y, min_y, start_y, page_n)
 
-                        if (width / height) >= (self.width / (y - min_y + 1e-6)):
-                            w = body_width
-                            h = w * height / width
-                        else:
-                            page_n += 1
-                            y = start_y
-                            if (width / height) >= (self.width / (y - min_y + 1e-6)):
-                                w = body_width
-                                h = w * height / width
-                            else:
-                                h = y - min_y
-                                w = h * width / height
-                        self.result.add_image(image_path=img, x=self.width / 2 - w / 2, y=y - h, page_number=page_n,
-                                              width=w, height=h)
-                        y -= h
-                    y = start_y
-                    page_n += 1
+                    y, page_n = start_y, page_n + 1
                 continue
+
+            # 3. 目录渲染容器
             elif key == "目录":
-                self.result.add_text(text=key, x=start_x, y=y, page_number=content_page, font_name="SimHei",
-                                     font_size=title_size)
+                self.result.add_text(text=key, x=start_x, y=y, page_number=content_page, 
+                                     font_name="SimHei", font_size=title_size)
                 y -= title_size / cm * 2.2
-                a = " ................................................"  #这个也有点蠢
-                for key2 in self.template[key]:
-                    num_n2 = self.result.add_text(text=f"{key2}{a}{self.template[key][key2]}",
-                                                  x=start_x + (subtitle_width + 2) * subtitle2_size / cm,
-                                                  y=y, page_number=content_page,
-                                                  width=content_width * content_size / cm,
-                                                  font_name="SimHei", font_size=content_size)
-                    y -= (num_n2 + content_size * 3) / cm
-                    if y <= 2 * self.height / 15:
-                        y = start_y
-                        page_n += 1
-                        num_n2 = self.result.update_text(index=-1, text=f"{key2}{a}{self.template[key][key2]}",
-                                                         x=start_x + (subtitle_width + 2) * subtitle2_size / cm,
-                                                         y=y, page_number=content_page,
-                                                         width=content_width * content_size / cm,
-                                                         font_name="SimHei", font_size=content_size)
-                        y -= (num_n2 + content_size * 3) / cm
-                page_n += 1
-                y = start_y
+                
+                for toc_key, page_val in self.template[key].items():
+                    # 生成带点的目录行
+                    dots = "." * (60 - len(toc_key) * 2)
+                    toc_line = f"{toc_key}{dots}{page_val}"
+                    h = self.result.add_text(text=toc_line,
+                                           x=start_x + (subtitle_width + 2) * sub2_size / cm,
+                                           y=y, page_number=content_page,
+                                           width=content_width * content_size / cm,
+                                           font_name="SimHei", font_size=content_size)
+                    y -= (h + content_size * 3) / cm
+                    if y <= min_y:
+                        y, page_n = start_y, page_n + 1
+                        content_page = page_n
+                y, page_n = start_y, page_n + 1
                 continue
+
+            # 4. 业务数据渲染项
             else:
                 if key == "评估物业":
                     content_page = page_n
                     page_n += 1
-                if self.template[key] == "":
-                    continue
-                if key[0] != '_':
-                    self.result.add_text(text=key, x=start_x, y=y, page_number=page_n, font_name="SimHei",
-                                         font_size=title_size)
-                    y -= title_size / cm * 2.2
-                for key2 in self.template[key]:
-                    if (key2 == "表格集"):
-                        ts = [
-                            ('FONT', (0, 0), (-1, -1), 'SimHei', 10),
-                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                            ('GRID', (0, 0), (-1, -1), 2, black),
-                            ('FONT', (1, 0), (1, -1), 'SimSun', 10),
-                        ]
-                        aW = content_width * content_size / cm
-                        aH = y - min_y
-                        if aH < self.height / 3:
-                            y = start_y
-                            page_n += 1
-                        for data in self.template[key]["表格集"]:
-                            L = len(data[0])
-                            h = self.result.add_table(data=data, x=start_x + (subtitle_width + 2) * subtitle2_size / cm,
-                                                      y=y,
-                                                      width=aW,
-                                                      wrap_cols=[_ for _ in range(L)],
-                                                      page_number=page_n, table_styles=ts)
-                            y -= h
-                            if y < min_y:
-                                y = start_y
-                                page_n += 1
-                                h = self.result.update_table(index=-1, data=data,
-                                                             x=start_x + (subtitle_width + 2) * subtitle2_size / cm,
-                                                             y=y,
-                                                             width=aW,
-                                                             # col_widths=[aW/L for _ in range(L)],
-                                                             wrap_cols=[_ for _ in range(L)],
-                                                             page_number=page_n, table_styles=ts)
-                                y -= h
-                                assert y >= min_y, "表格太大，一页装不下"
-                        continue
-                    if self.template[key][key2] == "" or self.template[key][key2] == ():
-                        continue
-                    if key2[0] == '_' and type(self.template[key][key2]) == tuple:
-                        num_n1 = self.result.add_text(text=self.template[key][key2][0], x=start_x, y=y,
-                                                      page_number=page_n,
-                                                      width=subtitle_width * subtitle2_size / cm,
-                                                      font_name="SimHei", font_size=subtitle2_size)
-                        num_n2 = self.result.add_text(text=self.template[key][key2][1],
-                                                      x=start_x + (subtitle_width + 2) * subtitle2_size / cm,
-                                                      y=y, page_number=page_n, width=content_width * content_size / cm,
-                                                      font_name="SimSun",
-                                                      font_size=content_size)
-                        y -= (max(num_n1, num_n2) + content_size * 3) / cm
-                        if y <= min_y:
-                            y = start_y
-                            page_n += 1
-                            num_n1 = self.result.update_text(index=-1, text=self.template[key][key2][0], x=start_x, y=y,
-                                                             page_number=page_n,
-                                                             width=subtitle_width * subtitle2_size / cm,
-                                                             font_name="SimHei", font_size=subtitle2_size)
-                            num_n2 = self.result.update_text(index=-1, text=self.template[key][key2][1],
-                                                             x=start_x + (subtitle_width + 2) * subtitle2_size / cm,
-                                                             y=y, page_number=page_n,
-                                                             width=content_width * content_size / cm,
-                                                             font_name="SimSun",
-                                                             font_size=content_size)
-                            y -= (max(num_n1, num_n2) + content_size * 3) / cm
-                    elif key2[0] == '_' and type(self.template[key][key2]) == str:
-                        num_n2 = self.result.add_text(text=self.template[key][key2],
-                                                      x=start_x + (subtitle_width + 2) * subtitle2_size / cm,
-                                                      y=y, page_number=page_n, width=content_width * content_size / cm,
-                                                      font_name="SimSun",
-                                                      font_size=content_size)
-                        y -= (num_n2 + content_size * 3) / cm
-                        if y <= min_y:
-                            y = start_y
-                            page_n += 1
-                            num_n2 = self.result.update_text(index=-1, text=self.template[key][key2],
-                                                             x=start_x + (subtitle_width + 2) * subtitle2_size / cm,
-                                                             y=y, page_number=page_n,
-                                                             width=content_width * content_size / cm,
-                                                             font_name="SimSun",
-                                                             font_size=content_size)
-                            y -= (num_n2 + content_size * 3) / cm
-                    else:
-                        num_n1 = self.result.add_text(text=key2, x=start_x, y=y, page_number=page_n,
-                                                      width=subtitle_width * subtitle2_size / cm,
-                                                      font_name="SimHei", font_size=subtitle2_size)
-                        num_n2 = self.result.add_text(text=self.template[key][key2],
-                                                      x=start_x + (subtitle_width + 2) * subtitle2_size / cm,
-                                                      y=y, page_number=page_n, width=content_width * content_size / cm,
-                                                      font_name="SimSun",
-                                                      font_size=content_size)
-                        y -= (max(num_n1, num_n2) + content_size * 3) / cm
-                        if y <= min_y:
-                            y = start_y
-                            page_n += 1
-                            num_n1 = self.result.update_text(index=-2, text=key2, x=start_x, y=y, page_number=page_n,
-                                                             width=subtitle_width * subtitle2_size / cm,
-                                                             font_name="SimHei", font_size=subtitle2_size)
-                            num_n2 = self.result.update_text(index=-1, text=self.template[key][key2],
-                                                             x=start_x + (subtitle_width + 2) * subtitle2_size / cm,
-                                                             y=y, page_number=page_n,
-                                                             width=content_width * content_size / cm,
-                                                             font_name="SimSun",
-                                                             font_size=content_size)
-                            y -= (max(num_n1, num_n2) + content_size * 3) / cm
-                try:
-                    if key[0] != '_':
-                        self.template["目录"][key] = page_n
-                except:
-                    pass
-                if y <= 2 * self.height / 3:
-                    y = start_y
-                    page_n += 1
-        self.pagenum = page_n - 2
-        pass
+                
+                if not self.template[key]: continue
 
-    # 类似test函数，纯调试用， 但我想应该可以增加几个参数作为报告中可修改的部分（添加的文字/图片，待ocr的图片，估计出来的价格，委托人，房产名之类的），
-    # 然后外面的接口只用调用这个函数就好了，但我不太清楚报告中那些是可变的，那些是不用变的，当然也可用默认值
-    #目前设置的接口有（依顺序）：封面图片、logo图片、客户名、房产证编号、房产概况、报告编号、ocr生成的表格、
-    #                      附录图片字典（目前仅支持只有图片）、城市名和城市介绍、周边环境介绍、交通环境介绍、房产估价，以及房产名称
+                if not key.startswith('_'):
+                    self.result.add_text(text=key, x=start_x, y=y, page_number=page_n, 
+                                         font_name="SimHei", font_size=title_size)
+                    y -= title_size / cm * 2.2
+
+                for sub_key, val in self.template[key].items():
+                    if not val: continue
+
+                    if sub_key == "表格集":
+                        y, page_n = self._draw_toc_tables(val, start_x, y, min_y, start_y, page_n, 
+                                                        subtitle_width, sub2_size, content_width, content_size)
+                    else:
+                        y, page_n = self._draw_template_item(sub_key, val, start_x, y, min_y, start_y, 
+                                                            page_n, subtitle_width, content_width, 
+                                                            sub2_size, content_size)
+
+                if not key.startswith('_'):
+                    self.template["目录"][key] = page_n
+                
+                if y <= 2 * self.height / 3:
+                    y, page_n = start_y, page_n + 1
+
+        self.pagenum = page_n - 2
+
+    def _draw_appendix_image(self, img_path, start_x, y, min_y, start_y, page_n):
+        """附录图片专用绘制逻辑，含比例适配"""
+        try:
+            reader = ImageReader(img_path)
+            img_w, img_h = reader.getSize()
+            body_w = self.width - 2 * start_x
+            
+            # 检查剩余空间是否足够
+            if (img_w / img_h) >= (self.width / (y - min_y + 1e-6)):
+                w, h = body_w, body_w * img_h / img_w
+            else:
+                # 空间不足，开启新页核心逻辑
+                y, page_n = start_y, page_n + 1
+                if (img_w / img_h) >= (self.width / (y - min_y + 1e-6)):
+                    w, h = body_w, body_w * img_h / img_w
+                else:
+                    h = y - min_y
+                    w = h * img_w / img_h
+                    
+            self.result.add_image(img_path, page_n, self.width / 2 - w / 2, y - h, w, h)
+            return y - h, page_n
+        except Exception as e:
+            print(f"绘制附录图片失败: {e}")
+            return y, page_n
+
+    def _draw_toc_tables(self, tables, start_x, y, min_y, start_y, page_n, sub_w, sub_size, con_w, con_size):
+        """绘制模板中的表格集容器"""
+        styles = [
+            ('FONT', (0, 0), (-1, -1), 'SimHei', 10),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 2, black),
+            ('FONT', (1, 0), (1, -1), 'SimSun', 10),
+        ]
+        
+        target_x = start_x + (sub_w + 2) * sub_size / cm
+        aW = con_w * con_size / cm
+        
+        for data in tables:
+            if not data: continue
+            if (y - min_y) < (self.height / 3):
+                y, page_n = start_y, page_n + 1
+                
+            L = len(data[0]) if data and len(data) > 0 else 1
+            h = self.result.add_table(data, page_n, target_x, y, aW, 
+                                     wrap_cols=list(range(L)), table_styles=styles)
+            y -= h
+            if y < min_y:
+                y, page_n = start_y, page_n + 1
+                h = self.result.update_table(-1, data, page_n, target_x, y, aW,
+                                            wrap_cols=list(range(L)), table_styles=styles)
+                y -= h
+        return y, page_n
+
+    def _draw_template_item(self, key, val, start_x, y, min_y, start_y, page_n, sub_w, con_w, sub_size, con_size):
+        """通用模板项绘制（支持键值对、元组引导项）"""
+        # 解析文本组合
+        is_underscore = key.startswith('_')
+        if is_underscore:
+            sub_text, con_text = (val[0], val[1]) if isinstance(val, tuple) else ("", str(val))
+        else:
+            sub_text, con_text = key, str(val)
+
+        # 辅助计算
+        sub_x, con_x = start_x, start_x + (sub_w + 2) * sub_size / cm
+        sub_width, con_width = sub_w * sub_size / cm, con_w * con_size / cm
+        
+        # 渲染
+        h_sub = self.result.add_text(sub_text, page_n, sub_x, y, sub_width, sub_size, font_name="SimHei") if sub_text else 0
+        h_con = self.result.add_text(con_text, page_n, con_x, y, con_width, con_size, font_name="SimSun")
+        
+        y -= (max(h_sub, h_con) + con_size * 3) / cm
+        
+        # 越界处理
+        if y <= min_y:
+            y, page_n = start_y, page_n + 1
+            if sub_text:
+                self.result.update_text(-1 if not is_underscore else -2, sub_text, page_n, sub_x, y, 
+                                      sub_width, sub_size, font_name="SimHei")
+            self.result.update_text(-1, con_text, page_n, con_x, y, con_width, con_size, font_name="SimSun")
+            y -= (con_size * 5) / cm
+            
+        return y, page_n
+
+    # 类似 test 函数，纯调试用
     def model_report(self, cover_img=None, logo_img=None, client_name: str = "", property_index: str = "",
                      property_summary: str = "", report_index: str = "",
                      ocr_table: list = None, appendix: dict = None, city: tuple = ("", "", ""), environment: str = "",
@@ -992,10 +984,10 @@ class property_report:
         
         # 获取城市信息 (防御逻辑)
         try:
-            mgr = MySQLManager()
-            city_introduction, city_detail = mgr.get_city_info(record.city)
-            mgr.close()
-        except:
+            with MySQLManager() as mgr:
+                city_introduction, city_detail = mgr.get_city_info(record.city)
+        except Exception as e:
+            print(f"获取城市信息出错: {e}")
             city_introduction, city_detail = None, None
             
         city = (record.city, 

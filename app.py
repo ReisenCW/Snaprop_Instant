@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import re
+import glob
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context, send_file
 from werkzeug.utils import secure_filename
@@ -421,7 +422,7 @@ def api_valuation():
                     "floor": data.get('floor', '中楼层'),
                     "fitment": data.get('fitment', '简装'),
                     "structure": data.get('structure', '平层'),
-                    "built_time": f"{data.get('year', 2015)}-01-01",
+                    "built_time": str(data.get('year', 2015)), # 简称年份只需要年份
                     "room": int(data.get('room', 2)),
                     "hall": int(data.get('hall', 1)),
                     "kitchen": int(data.get('kitchen', 1)),
@@ -484,7 +485,7 @@ def api_valuation():
                                 
                             # 处理房龄
                             house_year = i.get('house_year')
-                            built_time_str = f"{house_year}-01-01" if house_year else "2015-01-01"
+                            built_time_val = str(house_year) if house_year else "2015"
 
                             case = {
                                 'price': float(i["u_price"]),
@@ -492,7 +493,7 @@ def api_valuation():
                                 'floor': i['house_floor'],
                                 'fitment': i['house_decoration'],
                                 'structure': i.get('house_structure', '平层'),
-                                'built_time': built_time_str,
+                                'built_time': built_time_val,
                                 'transaction_time': str(i['transaction_time']),
                                 'green_rate': green_val,
                                 'address': i['house_loc'],
@@ -662,7 +663,41 @@ def api_valuation():
                     'report_path': report_path,
                     'pdf_url': final_pdf_url
                 }
-                
+
+                # --- Cleanup logic (Keep only final JSON and PDF) ---
+                try:
+                    cleanup_files = []
+                    # 1. Certificate and Photo
+                    if data.get('cert_image'): cleanup_files.append(data.get('cert_image'))
+                    if data.get('property_photo'): cleanup_files.append(data.get('property_photo'))
+                    # 2. Map snapshot
+                    if hasattr(u_record, 'map') and u_record.map: cleanup_files.append(u_record.map)
+                    # 3. OCR Excel
+                    if hasattr(u_record, 'production_ocr') and u_record.production_ocr: cleanup_files.append(u_record.production_ocr)
+                    # 4. Temp OCR Excel (if specifically generated as _tmp.xlsx)
+                    try:
+                        if 'temp_ocr_path' in locals() and temp_ocr_path: cleanup_files.append(temp_ocr_path)
+                    except: pass
+                    # 5. Report Logo
+                    if data.get('report_logo'): cleanup_files.append(data.get('report_logo'))
+                    # 6. OCR Tables directory cleanup (e.g. static/ocr_tables/xxx_0_OCR.xlsx)
+                    if data.get('cert_image'):
+                        img_stem = os.path.splitext(os.path.basename(data.get('cert_image')))[0]
+                        ocr_wildcard = os.path.join("static", "ocr_tables", f"{img_stem}*")
+                        cleanup_files.extend(glob.glob(ocr_wildcard))
+                    
+                    for f in set(cleanup_files):
+                        if not f: continue
+                        # 处理路径，移除开头的斜杠
+                        norm_f = f.lstrip('/\\').replace('\\', '/')
+                        if os.path.exists(norm_f):
+                            # Safety check: do not delete from static/reports
+                            if "static/reports" not in norm_f:
+                                os.remove(norm_f)
+                                print(f"Cleaned up temp file: {norm_f}")
+                except Exception as ce:
+                    print(f"Cleanup error: {ce}")
+
                 yield json.dumps({"status": "success", "result": response_data}) + "\n"
             except Exception as e:
                 import traceback

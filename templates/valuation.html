@@ -108,13 +108,19 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
       </div>
       <div class="card-body">
         <div class="mb-3">
-          <label for="certImage" class="form-label">上传房产证（支持图片或 Excel）</label>
-          <input
-            type="file"
-            class="form-control"
-            id="certImage"
-            accept="image/*,.xlsx,.xls"
-          />
+          <label class="form-label">上传房产证（支持图片或 Excel）</label>
+          <div>
+            <label for="certImage" class="btn btn-outline-primary btn-sm mb-1">
+              <i class="bi bi-upload"></i> 选择文件
+            </label>
+            <input
+              type="file"
+              id="certImage"
+              accept="image/*,.xlsx,.xls"
+              class="d-none"
+            />
+          </div>
+          <div id="certImageName" class="form-text text-muted"></div>
           <div class="text-center mt-2">
             <img id="certPreview" class="upload-preview img-thumbnail" style="display: none; max-height: 200px;" />
           </div>
@@ -156,13 +162,19 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
       </div>
       <div class="card-body">
         <div class="mb-3">
-          <label for="propertyPhoto" class="form-label">上传外观照片</label>
-          <input
-            type="file"
-            class="form-control"
-            id="propertyPhoto"
-            accept="image/*"
-          />
+          <label class="form-label">上传外观照片</label>
+          <div>
+            <label for="propertyPhoto" class="btn btn-outline-primary btn-sm mb-1">
+              <i class="bi bi-upload"></i> 选择文件
+            </label>
+            <input
+              type="file"
+              id="propertyPhoto"
+              accept="image/*"
+              class="d-none"
+            />
+          </div>
+          <div id="propertyPhotoName" class="form-text text-muted"></div>
           <div class="text-center mt-2">
             <img id="photoPreview" class="upload-preview img-thumbnail" style="display: none; max-height: 200px;" />
           </div>
@@ -665,12 +677,17 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
 
   // 文件选择与裁剪逻辑
   function handleFileSelect(fileInput, previewElement, hiddenInput) {
+    const fileNameDisplay = document.getElementById(fileInput.id + "Name");
     fileInput.addEventListener("change", async function (e) {
       const file = e.target.files[0];
       if (!file) {
         previewElement.style.display = "none";
+        if (fileNameDisplay) fileNameDisplay.textContent = "";
         return;
       }
+
+      // 显示文件名
+      if (fileNameDisplay) fileNameDisplay.textContent = "已选择: " + file.name;
 
       // 保存上下文
       currentFileContext = { file, fileType: fileInput.id, hiddenInput, previewElement };
@@ -683,12 +700,15 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
           cropTarget.src = e.target.result;
           const cropModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('cropModal'));
           cropModal.show();
+          // 清除 input.value 允许再次选择同一文件触发 change
+          fileInput.value = "";
         };
         reader.readAsDataURL(file);
       } else {
         // 如果是 Excel，直接开始处理
         previewElement.style.display = "none";
         await processFileUpload(file, fileInput.id, hiddenInput);
+        fileInput.value = "";
       }
     });
   }

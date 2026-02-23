@@ -93,10 +93,16 @@ class RealEstateValuation:
                         diff = 2
                     if case[key] > self.target_case[key]: diff = -diff
                 elif key == 'built_time':
-                    date_case = datetime.datetime.strptime(case[key], self.time_str_model)
-                    date_target = datetime.datetime.strptime(self.target_case[key], self.time_str_model)
-                    diff = abs((date_case - date_target).days) // 365 // 5
-                    if date_case > date_target: diff = -diff
+                    # Robust parsing for "2015-01-01" or just "2015"
+                    try:
+                        str_case = str(case[key])
+                        str_target = str(self.target_case[key])
+                        year_case = int(str_case.split('-')[0])
+                        year_target = int(str_target.split('-')[0])
+                        diff = abs(year_case - year_target) // 5
+                        if year_case > year_target: diff = -diff
+                    except (ValueError, IndexError):
+                        diff = 0
                 elif key == 'floor':
                     diff = abs(case[key] - self.target_case[key]) // 5
                     if case[key] > self.target_case[key]: diff = -diff

@@ -221,7 +221,8 @@
         <!-- 房产照片展示 (放在最后) -->
         <h5 class="mt-5 mb-3 border-bottom pb-2">现场及凭据照片</h5>
         <div class="row mb-4">
-          {% if report.property_data.property_photo %}
+          {% if report.embedded_images.photo_image or
+          report.property_data.property_photo %}
           <div class="col-md-6 mb-3">
             <div class="card h-100 shadow-sm">
               <div class="card-header bg-light">
@@ -231,7 +232,7 @@
               </div>
               <div class="card-body text-center p-2">
                 <img
-                  src="/{{ report.property_data.property_photo }}"
+                  src="{{ report.embedded_images.photo_image if report.embedded_images.photo_image else '/' + report.property_data.property_photo }}"
                   class="img-fluid rounded"
                   style="max-height: 400px; width: auto; object-fit: contain"
                   alt="房屋外观"
@@ -239,7 +240,8 @@
               </div>
             </div>
           </div>
-          {% endif %} {% if report.property_data.property_cert_image %}
+          {% endif %} {% if report.embedded_images.cert_image or
+          report.property_data.property_cert_image %}
           <div class="col-md-6 mb-3">
             <div class="card h-100 shadow-sm">
               <div class="card-header bg-light">
@@ -249,7 +251,7 @@
               </div>
               <div class="card-body text-center p-2">
                 <img
-                  src="/{{ report.property_data.property_cert_image }}"
+                  src="{{ report.embedded_images.cert_image if report.embedded_images.cert_image else '/' + report.property_data.property_cert_image }}"
                   class="img-fluid rounded"
                   style="max-height: 400px; width: auto; object-fit: contain"
                   alt="房产证"

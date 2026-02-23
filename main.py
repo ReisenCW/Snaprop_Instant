@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import argparse
+import base64
 from datetime import datetime
 
 # 确保可以导入其他模块
@@ -20,6 +21,21 @@ except ImportError as e:
     print(f"导入模块失败: {str(e)}")
     print("请确保已安装所有依赖项，并且所有模块都存在")
     sys.exit(1)
+
+def get_base64_image(image_path):
+    """将图片文件转换为 Base64 字符串"""
+    if not image_path or not os.path.exists(image_path):
+        return None
+    try:
+        ext = os.path.splitext(image_path)[1].lower().replace('.', '')
+        if ext not in ['jpg', 'jpeg', 'png', 'gif']:
+            ext = 'jpeg'
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            return f"data:image/{ext};base64,{encoded_string}"
+    except Exception as e:
+        print(f"Error encoding image to base64: {e}")
+        return None
 
 class PropertyValuationSystem:
     """
@@ -117,7 +133,7 @@ class PropertyValuationSystem:
                     'size': 90,
                     'floor': '中楼层',
                     'fitment': '精装',
-                    'built_time': '2015-01-01',
+                    'built_time': '2015',
                     'transaction_time': '2023-01-01',
                     'green_rate': 0.3,
                     'address': '示例小区B',
@@ -128,7 +144,7 @@ class PropertyValuationSystem:
                     'size': 120,
                     'floor': '低楼层',
                     'fitment': '简装',
-                    'built_time': '2010-01-01',
+                    'built_time': '2010',
                     'transaction_time': '2023-03-01',
                     'green_rate': 0.25,
                     'address': '示例小区B',
@@ -139,7 +155,7 @@ class PropertyValuationSystem:
                     'size': 75,
                     'floor': '高楼层',
                     'fitment': '精装',
-                    'built_time': '2018-01-01',
+                    'built_time': '2018',
                     'transaction_time': '2023-02-01',
                     'green_rate': 0.35,
                     'address': '示例小区C',
@@ -184,6 +200,15 @@ class PropertyValuationSystem:
         report_filename = f"property_valuation_report_{timestamp}.json"
         report_path = os.path.join(reports_dir, report_filename)
         
+        # 转换并存储图片的 Base64 数据，以便在删除本地文件后仍能查看报告
+        cert_img_b64 = get_base64_image(property_data.get('property_cert_image'))
+        photo_img_b64 = get_base64_image(property_data.get('property_photo'))
+        map_img_b64 = None
+        # 如果 property_data 本身包含 map_image 或从处理后的原始数据中提取
+        map_path = property_data.get('map_image') # 可能由 api 填充
+        if map_path:
+            map_img_b64 = get_base64_image(map_path)
+
         # 构建报告数据
         report_data = {
             "property_data": property_data,
@@ -192,7 +217,12 @@ class PropertyValuationSystem:
             "price_prediction": price_prediction,
             "pdf_url": pdf_url,
             "generated_at": timestamp,
-            "report_id": f"REPORT_{timestamp}"
+            "report_id": f"REPORT_{timestamp}",
+            "embedded_images": {
+                "cert_image": cert_img_b64,
+                "photo_image": photo_img_b64,
+                "map_image": map_img_b64
+            }
         }
         
         # 保存报告
@@ -237,7 +267,7 @@ def main():
         "size": args.area,
         "floor": args.floor,
         "fitment": args.fitment,
-        "built_time": f"{args.year}-01-01",
+        "built_time": str(args.year),
         "green_rate": processed_data.get("enhanced_data", {}).get("property_info", {}).get("green_rate", 0.3),
         "transaction_type": 1
     }
