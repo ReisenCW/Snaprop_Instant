@@ -514,34 +514,40 @@ def api_valuation():
                 estimation_result = valuation_system.estimate_property_value(target_property, comparable_cases, pro_adjustments=pro_adjustments)
                 
                 # 进入预测阶段
-                yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成基础估值，通过AI预测进行微调..."}) + "\n"
+                enable_prediction = data.get('enable_prediction', True)
                 
+                if enable_prediction:
+                    yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成基础估值，通过AI预测进行微调..."}) + "\n"
+                else:
+                    yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成基础估值，跳过AI趋势预测...", "done": True}) + "\n"
+
                 trend_factor = 0.0
                 min_trend = 0.0
                 max_trend = 0.0
                 prediction = None
                 
-                try:
-                    address = data.get('address', '')
-                    city = data.get('city', '上海')
-                    region = city + address
-                    currentTime = datetime.now()
-                    beforeTime = currentTime - timedelta(days=180)
-                    afterTime = currentTime + timedelta(days=60)
-                    time_range = f"{beforeTime.strftime('%Y年%m月')}-{afterTime.strftime('%Y年%m月')}"
-                    
-                    query = f"{time_range}, {region}的房价走势如何?"
-                    prediction = predict_region(query, max_retries=2, enable_evolution=False, debug=True)
-                    
-                    if prediction:
-                        min_trend, max_trend, is_segmented, seg_info = extract_trend_factor(prediction)
-                        trend_factor = (min_trend + max_trend) / 2.0
-                except Exception as e:
-                    print(f"房价预测失败: {str(e)}")
+                if enable_prediction:
+                    try:
+                        address = data.get('address', '')
+                        city = data.get('city', '上海')
+                        region = city + address
+                        currentTime = datetime.now()
+                        beforeTime = currentTime - timedelta(days=180)
+                        afterTime = currentTime + timedelta(days=60)
+                        time_range = f"{beforeTime.strftime('%Y年%m月')}-{afterTime.strftime('%Y年%m月')}"
+                        
+                        query = f"{time_range}, {region}的房价走势如何?"
+                        prediction = predict_region(query, max_retries=2, enable_evolution=False, debug=True)
+                        
+                        if prediction:
+                            min_trend, max_trend, is_segmented, seg_info = extract_trend_factor(prediction)
+                            trend_factor = (min_trend + max_trend) / 2.0
+                    except Exception as e:
+                        print(f"房价预测失败: {str(e)}")
 
                 # 应用趋势调整
                 original_price = estimation_result['estimated_price']
-                if original_price is not None:
+                if original_price is not None and enable_prediction:
                     min_adjusted_price = original_price * (1 + min_trend)
                     max_adjusted_price = original_price * (1 + max_trend)
                     estimation_result['estimated_price'] = (min_adjusted_price + max_adjusted_price) / 2
@@ -567,8 +573,9 @@ def api_valuation():
                         estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {time_range} 的房价趋势预测：\n{short_prediction}\n\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{adj_price_str} 元/平"
                         # 移除了细节分析部分以简化结果显示
 
-                yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成趋势预测与价值微调", "done": True}) + "\n"
-
+                if enable_prediction:
+                    yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成趋势预测与价值微调", "done": True}) + "\n"
+                
                 # 提取一些必要数值
                 area = float(data.get('area', 90))
                 total_price = estimation_result['estimated_price'] * area

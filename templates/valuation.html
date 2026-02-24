@@ -537,6 +537,17 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
 
 <div class="row">
   <div class="col-lg-12">
+    <!-- 房价预测微调开关 -->
+    <div class="d-flex flex-column align-items-center mb-3">
+      <div class="form-check form-switch" title="开启AI房价趋势预测微调">
+        <input class="form-check-input" type="checkbox" id="enablePrediction" checked style="width: 3rem; height: 1.5rem; cursor: pointer;">
+        <label class="form-check-label ms-2 fw-bold" for="enablePrediction" style="font-size: 1.1rem; cursor: pointer;">开启房价预测微调</label>
+      </div>
+      <div class="text-muted small mt-1">
+        <i class="bi bi-info-circle me-1"></i>开启后估值更加准确但需要额外等待 2 分钟左右
+      </div>
+    </div>
+
     <!-- 开始估值按钮 -->
     <div class="d-grid mb-4 mx-auto" style="max-width: 400px">
       <button type="button" id="submitBtn" class="btn btn-primary btn-lg">
@@ -919,8 +930,9 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
       return;
     }
 
-    // 获取版本类型
+    // 获取版本类型及预测设置
     const version = document.querySelector('input[name="versionType"]:checked').value;
+    const enablePrediction = document.getElementById("enablePrediction").checked;
     
     // 获取表单数据
     const formData = {
@@ -948,6 +960,7 @@ block extra_css %}<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1
       occupancy_status: document.getElementById("occupancy").value,
       
       version: version,
+      enable_prediction: enablePrediction,
       ocr_table: (function() {
           const inputs = Array.from(document.querySelectorAll(".ocr-cell-input"));
           let grid = [];
