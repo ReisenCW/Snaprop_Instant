@@ -56,13 +56,6 @@
                 >估值记录</a
               >
             </li>
-            <li class="nav-item">
-              <a
-                class="nav-link {% if request.path == '/about' %}active{% endif %}"
-                href="/about"
-                >关于我们</a
-              >
-            </li>
           </ul>
         </div>
       </div>
@@ -74,39 +67,44 @@
     {% block modals %}{% endblock %}
 
     <!-- 页脚 -->
-    <footer class="bg-light py-4 mt-5">
+    <footer class="footer">
       <div class="container">
-        <div class="row">
-          <div class="col-md-6">
+        <div class="row justify-content-center">
+          <div class="col-lg-6 col-md-8 mb-4 mb-lg-0">
             <h5>房估宝 - 房产估值新范式</h5>
-            <p>
+            <p class="mb-0">
               基于多模态视觉-语义-空间融合编码器、LLM增强推理架构和可微分规则学习框架的智能房产估值系统
             </p>
           </div>
-          <div class="col-md-3">
+          <div class="col-lg-3 col-md-4 offset-lg-1">
             <h5>快速链接</h5>
             <ul class="list-unstyled">
-              <li><a href="/" class="text-decoration-none">首页</a></li>
               <li>
-                <a href="/valuation" class="text-decoration-none">房产估值</a>
+                <a href="/" class="footer-link text-decoration-none">首页</a>
               </li>
               <li>
-                <a href="/reports" class="text-decoration-none">估值记录</a>
+                <a href="/valuation" class="footer-link text-decoration-none"
+                  >房产估值</a
+                >
               </li>
               <li>
-                <a href="/about" class="text-decoration-none">关于我们</a>
+                <a href="/reports" class="footer-link text-decoration-none"
+                  >估值记录</a
+                >
               </li>
-            </ul>
-          </div>
-          <div class="col-md-3">
-            <h5>联系我们</h5>
-            <ul class="list-unstyled">
-              <li><i class="bi bi-envelope"></i> info@fangubao.com</li>
             </ul>
           </div>
         </div>
-        <hr />
-        <p class="text-center mb-0">&copy; 2026 房估宝. 保留所有权利.</p>
+        <hr class="opacity-10 mx-auto" style="max-width: 90%" />
+        <div class="row justify-content-center align-items-center">
+          <div class="col-lg-10">
+            <div class="row">
+              <div class="col-md-6 text-center text-md-start">
+                <p class="copyright mb-0">&copy; 2026 房估宝. 保留所有权利.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </footer>
 

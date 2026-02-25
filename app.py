@@ -112,11 +112,6 @@ def index():
     """首页"""
     return render_template('index.html')
 
-@app.route('/about')
-def about():
-    """关于页面"""
-    return render_template('about.html')
-
 @app.route('/valuation')
 def valuation():
     """估值页面"""
