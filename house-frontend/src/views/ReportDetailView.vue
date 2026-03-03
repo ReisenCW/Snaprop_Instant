@@ -219,14 +219,14 @@ const totalPrice = computed(() => {
 }
 
 .actions-bar {
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto 20px;
   display: flex;
   justify-content: space-between;
 }
 
 .report-paper {
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
   background: white;
   padding: 60px;
@@ -345,8 +345,8 @@ const totalPrice = computed(() => {
   border-collapse: collapse;
   margin: 1em 0;
   font-size: 13px;
-  overflow-x: auto;
-  display: block;
+  /* overflow-x: auto; */
+  display: table;
 }
 
 .markdown-body :deep(th), .markdown-body :deep(td) {
