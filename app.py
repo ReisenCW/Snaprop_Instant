@@ -391,25 +391,37 @@ def api_valuation():
                 yield json.dumps({"status": "progress", "stage": "process", "message": "已完成房产数据及地图处理", "done": True}) + "\n"
                 
                 # 获取绿化率
-                green_val = 0.3
+                green_val = 0.2
                 if data.get('greening') is not None:
                     try:
-                        green_val = float(data.get('greening')) / 100.0
+                        val = float(data.get('greening'))
+                        if val > 1:
+                            green_val = val / 100.0
+                        else:
+                            green_val = val
                     except:
                         pass
                 else:
                     # 尝试从处理过的数据中获取
-                    raw_green = processed_data.get("enhanced_data", {}).get("property_info", {}).get("green_rate", "0.3")
+                    raw_green = processed_data.get("enhanced_data", {}).get("property_info", {}).get("green_rate", "0.2")
                     try:
                         if isinstance(raw_green, str):
                             if '%' in raw_green:
                                 green_val = float(raw_green.replace('%', '')) / 100.0
                             else:
-                                green_val = float(raw_green)
+                                val = float(raw_green)
+                                if val > 1:
+                                    green_val = val / 100.0
+                                else:
+                                    green_val = val
                         else:
-                            green_val = float(raw_green)
+                            val = float(raw_green)
+                            if val > 1:
+                                green_val = val / 100.0
+                            else:
+                                green_val = val
                     except:
-                        green_val = 0.3
+                        green_val = 0.2
 
                 # 准备目标房产数据
                 target_property = {

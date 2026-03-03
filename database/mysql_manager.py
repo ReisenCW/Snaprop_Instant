@@ -156,14 +156,22 @@ class MySQLManager():
                 # 解析 green_rate，处理可能出现的百分号或 None
                 green_rate_raw = row[6]
                 if isinstance(green_rate_raw, str) and '%' in green_rate_raw:
-                    green_rate = float(green_rate_raw.strip('%')) / 100
+                    try:
+                        green_rate = float(green_rate_raw.strip('%')) / 100
+                    except (ValueError, TypeError):
+                        green_rate = 0.2
                 elif green_rate_raw:
                     try:
-                        green_rate = float(green_rate_raw)
+                        val = float(green_rate_raw)
+                        # 如果大于 1，一般是 35 这种表示 35%
+                        if val > 1:
+                            green_rate = val / 100
+                        else:
+                            green_rate = val
                     except (ValueError, TypeError):
-                        green_rate = 0.3
+                        green_rate = 0.2
                 else:
-                    green_rate = 0.3
+                    green_rate = 0.2
 
                 case = {
                     'price': float(row[0]) if row[0] is not None else 0.0,
