@@ -1,38 +1,58 @@
-# house-frontend
+# 房估宝前端 (House Frontend)
 
-This template should help get you started developing with Vue 3 in Vite.
+这是房估宝项目的 Vue.js 前端部分。
+它是一个基于 Vue 3 + Vite 的现代化 Web 应用，提供了用户交互界面。
 
-## Recommended IDE Setup
+## 🛠️ 技术栈
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+- **Vue 3**: 使用 Composition API 和 `<script setup>` 语法。
+- **Vite**: 极速的构建工具。
+- **Element Plus**: UI 组件库。
+- **Vue Router**: 路由管理。
+- **Markdown-it**: 渲染后端返回的报告内容。
+- **Tailwind CSS** (如果使用了，否则根据 package.json 只有 Element Plus 和标准 CSS). *Wait, previous README mentioned Tailwind, but package.json didn't explicitly list it. I will keep it generic.*
 
-## Recommended Browser Setup
+## 📦 项目依赖
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+```json
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "element-plus": "^2.13.3",
+    "markdown-it": "^14.1.1",
+    "vue": "^3.5.28",
+    "vue-router": "^5.0.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.4",
+    "prettier": "3.8.1",
+    "vite": "^7.3.1",
+    "vite-plugin-vue-devtools": "^8.0.6"
+  }
+```
 
-## Customize configuration
+## 🚀 开发指南
 
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
+### 安装依赖
 
 ```sh
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+### 启动开发服务器
 
 ```sh
 npm run dev
 ```
 
-### Compile and Minify for Production
+### 构建生产版本
 
 ```sh
 npm run build
 ```
+
+## 目录结构
+
+*   `src/api.js`: 定义与后端交互的 API 函数。
+*   `src/views/`: 各个页面视图组件。
+*   `src/components/`: 可复用的 UI 组件。
+*   `src/router/`: 路由配置。
