@@ -8,6 +8,7 @@ import MarkdownIt from 'markdown-it'
 import { houseStore } from '@/store'
 import { startValuation } from '@/api'
 import { API_BASE_URL } from '@/config'
+import ReportInfoDialog from '@/components/ReportInfoDialog.vue'
 
 const md = new MarkdownIt({
   html: true,
@@ -25,6 +26,7 @@ const houseInfo = houseStore
 const valuationResult = ref(null)
 const pdfUrl = ref('')
 const isGeneratingPdf = ref(false)
+const showReportDialog = ref(false)
 
 // Computed properties for safe data access
 const totalPrice = computed(() => {
@@ -111,25 +113,35 @@ const downloadReport = async () => {
     link.click()
     document.body.removeChild(link)
   } else {
-    try {
-      isGeneratingPdf.value = true
-      ElMessage.info('正在请求后端生成 PDF 报告，请稍候...')
-      const res = await axios.post(`${API_BASE_URL}/api/generate_pdf`, {
-        report_id: valuationResult.value.report_id,
-        client_name: '同小舟'
-      })
-      if (res.data && res.data.success) {
-        pdfUrl.value = res.data.pdf_url
-        ElMessage.success('PDF 报告成功生成，开始下载')
-        downloadReport()
-      } else {
-        throw new Error(res.data?.error || 'PDF 生成失败')
-      }
-    } catch (error) {
-      ElMessage.error(`PDF 生成失败: ${error.message}`)
-    } finally {
-      isGeneratingPdf.value = false
+    showReportDialog.value = true
+  }
+}
+
+const handleReportConfirm = async (formData) => {
+  showReportDialog.value = false
+  try {
+    isGeneratingPdf.value = true
+    ElMessage.info('正在请求后端生成 PDF 报告，请稍候...')
+    const res = await axios.post(`${API_BASE_URL}/api/generate_pdf`, {
+      report_id: valuationResult.value.report_id,
+      client_name: formData.clientName,
+      report_logo: formData.reportLogo,
+      surrounding: formData.surrounding,
+      traffic: formData.traffic,
+      property_overview: formData.propertyOverview,
+      occupancy: formData.occupancy
+    })
+    if (res.data && res.data.success) {
+      pdfUrl.value = res.data.pdf_url
+      ElMessage.success('PDF 报告成功生成，开始下载')
+      downloadReport()
+    } else {
+      throw new Error(res.data?.error || 'PDF 生成失败')
     }
+  } catch (error) {
+    ElMessage.error(`PDF 生成失败: ${error.message}`)
+  } finally {
+    isGeneratingPdf.value = false
   }
 }
 
@@ -148,6 +160,15 @@ const formatYear = (val) => {
 </script>
 
 <template>
+  <ReportInfoDialog
+    v-model:visible="showReportDialog"
+    :initial-data="{ 
+      ...houseInfo.valuationData, 
+      report_id: reportId,
+      house_type: `${houseInfo.rooms}室${houseInfo.halls}厅`
+    }"
+    @confirm="handleReportConfirm"
+  />
   <div class="step-three-container">
     <div v-if="isLoading" class="loading-state">
       <div class="loading-animation">

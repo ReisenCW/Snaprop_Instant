@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { View, Search, Calendar, House, Download, Refresh, ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
+import ReportInfoDialog from '@/components/ReportInfoDialog.vue'
 import { getHistory } from '@/api'
 import { API_BASE_URL } from '@/config'
 
@@ -12,6 +13,8 @@ const isLoading = ref(true)
 const isGeneratingPdf = ref(false)
 const searchKeyword = ref('')
 const router = useRouter()
+const showReportDialog = ref(false)
+const currentReportForPdf = ref(null)
 
 const fetchReports = async () => {
   isLoading.value = true
@@ -54,12 +57,24 @@ const handleDownloadPdf = (pdf_url) => {
   if (pdf_url) {
     const url = pdf_url.startsWith('http') ? pdf_url : `${API_BASE_URL}${pdf_url}`
     window.open(url, '_blank')
-  } else {
-    ElMessage.warning('该记录暂未生成 PDF 报告，请点击右侧按钮生成')
   }
 }
 
-const generatePdf = async (row) => {
+const generatePdf = (row) => {
+  currentReportForPdf.value = {
+    report_id: row.report_id || row.id.replace('.json', ''),
+    address: row.address,
+    city: row.city || '上海',
+    area: row.area,
+    house_type: row.house_type
+  }
+  showReportDialog.value = true
+}
+
+const handleReportConfirm = async (formData) => {
+  showReportDialog.value = false
+  if (!currentReportForPdf.value) return
+
   if (isGeneratingPdf.value) return
   
   try {
@@ -67,11 +82,16 @@ const generatePdf = async (row) => {
     ElMessage.info('正在请求后端生成 PDF 报告，请稍候...')
     
     // row.id typically comes from filename which matches report_id
-    const report_id = row.report_id || row.id.replace('.json', '')
+    const report_id = currentReportForPdf.value.report_id
     
     const res = await axios.post(`${API_BASE_URL}/api/generate_pdf`, {
       report_id: report_id,
-      client_name: '同小舟'
+      client_name: formData.clientName,
+      report_logo: formData.reportLogo,
+      surrounding: formData.surrounding,
+      traffic: formData.traffic,
+      property_overview: formData.propertyOverview,
+      occupancy: formData.occupancy
     })
     
     if (res.data && res.data.success) {
@@ -101,6 +121,11 @@ const filteredReports = computed(() => {
 
 <template>
   <div class="history-container">
+    <ReportInfoDialog
+      v-model:visible="showReportDialog"
+      :initial-data="currentReportForPdf"
+      @confirm="handleReportConfirm"
+    />
     <div class="page-meta">
       <el-breadcrumb separator="/">
         <el-breadcrumb-item @click="router.push('/')" style="cursor: pointer;">
