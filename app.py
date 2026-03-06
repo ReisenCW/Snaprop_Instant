@@ -9,6 +9,7 @@ import re
 import glob
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context, send_file
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import pandas as pd
 import openpyxl
@@ -33,6 +34,7 @@ except ImportError as e:
 
 # 创建Flask应用
 app = Flask(__name__)
+CORS(app) # 启用跨域支持以对接新的 Vue 前端
 
 # 配置上传文件目录
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
@@ -373,359 +375,256 @@ def api_valuation():
     try:
         data = request.get_json()
         
-        def generate():
+        # Handle property photo(s) - consolidate into singular
+        # Step 2 sends property_photos (list of base64), legacy might send property_photo (path/base64)
+        all_photos = []
+        if data.get('property_photos') and isinstance(data.get('property_photos'), list):
+             all_photos = data.get('property_photos')
+        elif data.get('property_photo'):
+             all_photos = [data.get('property_photo')]
+             
+        main_photo = all_photos[0] if all_photos else None
+
+        # 1. 提取和处理房产数据
+        property_data = {
+            "address": data.get('address'),
+            "city": data.get('city'),
+            "area": float(data.get('area', 100)),
+            "house_type": f"{data.get('room')}室{data.get('hall')}厅",
+            "year": data.get('year'),
+            "floor": data.get('floor'),
+            "fitment": data.get('fitment'),
+            "structure": data.get('structure'),
+            "property_cert_image": data.get('cert_image'),
+            "property_photos": all_photos,
+            "property_photo": main_photo,
+            "property_text": data.get('description')
+        }
+        
+        # 处理房产数据 (包含地图生成等)
+        processed_data = valuation_system.process_property_data(property_data)
+        
+        # 获取绿化率
+        green_val = 0.2
+        if data.get('greening') is not None:
             try:
-                # 1. 提取和处理房产数据
-                yield json.dumps({"status": "progress", "stage": "process", "message": "正在处理房产数据及地图..."}) + "\n"
-                
-                property_data = {
-                    "address": data.get('address'),
-                    "city": data.get('city'),
-                    "property_cert_image": data.get('cert_image'),
-                    "property_photo": data.get('property_photo'),
-                    "property_text": data.get('description')
-                }
-                
-                # 处理房产数据 (内部会包含地图获取)
-                processed_data = valuation_system.process_property_data(property_data)
-                yield json.dumps({"status": "progress", "stage": "process", "message": "已完成房产数据及地图处理", "done": True}) + "\n"
-                
-                # 获取绿化率
-                green_val = 0.2
-                if data.get('greening') is not None:
-                    try:
-                        val = float(data.get('greening'))
-                        if val > 1:
-                            green_val = val / 100.0
-                        else:
-                            green_val = val
-                    except:
-                        pass
-                else:
-                    # 尝试从处理过的数据中获取
-                    raw_green = processed_data.get("enhanced_data", {}).get("property_info", {}).get("green_rate", "0.2")
-                    try:
-                        if isinstance(raw_green, str):
-                            if '%' in raw_green:
-                                green_val = float(raw_green.replace('%', '')) / 100.0
-                            else:
-                                val = float(raw_green)
-                                if val > 1:
-                                    green_val = val / 100.0
-                                else:
-                                    green_val = val
-                        else:
-                            val = float(raw_green)
-                            if val > 1:
-                                green_val = val / 100.0
-                            else:
-                                green_val = val
-                    except:
-                        green_val = 0.2
+                val = float(data.get('greening'))
+                green_val = val / 100.0 if val > 1 else val
+            except: pass
+        else:
+            raw_green = processed_data.get("enhanced_data", {}).get("property_info", {}).get("green_rate", "0.2")
+            try:
+                if isinstance(raw_green, str):
+                    if '%' in raw_green: green_val = float(raw_green.replace('%', '')) / 100.0
+                    else: green_val = float(raw_green)
+                else: green_val = float(raw_green)
+            except: pass
 
-                # 准备目标房产数据
-                target_property = {
-                    "size": float(data.get('area', 90)),
-                    "floor": data.get('floor', '中楼层'),
-                    "fitment": data.get('fitment', '简装'),
-                    "structure": data.get('structure', '平层'),
-                    "built_time": str(data.get('year', 2015)), # 简称年份只需要年份
-                    "room": int(data.get('room', 2)),
-                    "hall": int(data.get('hall', 1)),
-                    "kitchen": int(data.get('kitchen', 1)),
-                    "bathroom": int(data.get('bathroom', 1)),
-                    "green_rate": green_val,
-                    "transaction_type": 1
-                }
-                
-                # 2. 匹配历史可比案例及估算价值
-                yield json.dumps({"status": "progress", "stage": "estimate", "message": "正在匹配案例并估算房产价值..."}) + "\n"
-                comparable_cases = None
-                mysql_manager = None
-                try:
-                    mysql_manager = MySQLManager()
-                    city = data.get('city', '上海')
-                    
-                    room = data.get('room', 2)
-                    hall = data.get('hall', 1)
-                    kitchen = data.get('kitchen', 1)
-                    bathroom = data.get('bathroom', 1)
-                    house_type = f"{room}室{hall}厅{kitchen}厨{bathroom}卫"
-                    
-                    house_loc = data.get('address', '')
-                    
-                    selection_example = careful_selection(
-                        username=mysql_manager._username,
-                        password=mysql_manager._password,
-                        host=mysql_manager._host,
-                        port=mysql_manager._port,
-                        database=mysql_manager._db,
-                        table=mysql_manager.get_table(city),
-                        house_floor=target_property['floor'],
-                        house_area=target_property['size'],
-                        house_type=house_type,
-                        house_decoration=target_property['fitment'],
-                        house_year=int(target_property['built_time'].split('-')[0]),
-                        house_loc=house_loc
-                    )
-                    
-                    df = selection_example.selection()
-                    
-                    if hasattr(selection_example, 'last_strategy_msg'):
-                        yield json.dumps({"status": "progress", "stage": "estimate", "message": f"{selection_example.last_strategy_msg}，正在计算估值..."}) + "\n"
+        # 准备目标房产数据
+        target_property = {
+            "size": property_data['area'],
+            "floor": data.get('floor', '中楼层'),
+            "fitment": data.get('fitment', '精装'),
+            "structure": data.get('structure', '平层'),
+            "built_time": str(data.get('year', 2015)),
+            "room": int(data.get('room', 2)),
+            "hall": int(data.get('hall', 1)),
+            "kitchen": int(data.get('kitchen', 1)),
+            "bathroom": int(data.get('bathroom', 1)),
+            "green_rate": green_val,
+            "transaction_type": 1
+        }
+        
+        # 2. 匹配案例并估算价值
+        # 这里逻辑沿用原来的 PropertyValuationSystem.estimate_property_value 但不生成报告
+        from price.careful_selection import careful_selection
+        mysql_manager = MySQLManager()
+        city = data.get('city', '上海')
+        house_type_full = f"{data.get('room')}室{data.get('hall')}厅{data.get('kitchen',1)}厨{data.get('bathroom',1)}卫"
+        
+        selection_example = careful_selection(
+            username=mysql_manager._username, password=mysql_manager._password,
+            host=mysql_manager._host, port=mysql_manager._port,
+            database=mysql_manager._db, table=mysql_manager.get_table(city),
+            house_floor=target_property['floor'], house_area=target_property['size'],
+            house_type=house_type_full, house_decoration=target_property['fitment'],
+            house_year=int(target_property['built_time']), house_loc=property_data['address']
+        )
+        df = selection_example.selection()
+        comparable_cases = []
+        if df:
+            for i in df:
+                comparable_cases.append({
+                    'price': float(i["u_price"]), 
+                    'size': float(i['house_area']),
+                    'floor': i['house_floor'], 
+                    'fitment': i['house_decoration'],
+                    'structure': i.get('house_structure', '-'),
+                    'green_rate': i.get('green_rate', '-'),
+                    'house_type': i.get('house_type', '-'),
+                    'built_time': str(i.get('house_year', 2015)), 
+                    'transaction_time': str(i['transaction_time']),
+                    'address': i['house_loc']
+                })
+        mysql_manager.close()
 
-                    if df:
-                        comparable_cases = []
-                        for i in df[:]:
-                            # 处理绿化率字符串
-                            raw_green = i.get('green_rate', '0.3')
-                            try:
-                                if isinstance(raw_green, str):
-                                    if '%' in raw_green:
-                                        green_val = float(raw_green.replace('%', '')) / 100.0
-                                    else:
-                                        green_val = float(raw_green)
-                                else:
-                                    green_val = float(raw_green)
-                            except:
-                                green_val = 0.3
-                                
-                            # 处理房龄
-                            house_year = i.get('house_year')
-                            built_time_val = str(house_year) if house_year else "2015"
+        estimation_result = valuation_system.estimate_property_value(target_property, comparable_cases)
+        
+        # 3. AI 预测调整
+        if data.get('enable_prediction', True):
+            try:
+                # 尝试预测趋势
+                address = data.get('address', '')
+                region = city + address
+                query = f"最近6个月, {region}的房价走势如何?"
+                prediction = predict_region(query)
+                if prediction:
+                    min_t, max_t, _, _ = extract_trend_factor(prediction)
+                    trend_factor = (min_t + max_t) / 2.0
+                    orig_p = estimation_result['estimated_price']
+                    new_p = orig_p * (1 + trend_factor)
+                    estimation_result['estimated_price'] = new_p
+                    estimation_result['explanation'] += f"\n\n【AI趋势预测】\n{prediction}\n\n微调后单价：{int(new_p)}元/平"
+            except Exception as pe:
+                print(f"Prediction error: {pe}")
 
-                            case = {
-                                'price': float(i["u_price"]),
-                                'size': float(i['house_area']),
-                                'floor': i['house_floor'],
-                                'fitment': i['house_decoration'],
-                                'structure': i.get('house_structure', '平层'),
-                                'built_time': built_time_val,
-                                'transaction_time': str(i['transaction_time']),
-                                'green_rate': green_val,
-                                'address': i['house_loc'],
-                                'house_type': i.get('house_type', '-'),
-                                'transaction_type': 1
-                            }
-                            comparable_cases.append(case)
-                except Exception as e:
-                    print(f"获取可比案例失败: {str(e)}")
-                finally:
-                    if mysql_manager:
-                        mysql_manager.close()
-                
-                # 提取专业调整参数
-                pro_adjustments = data.get('pro_adjustments')
-                
-                # 开始估价计算
-                estimation_result = valuation_system.estimate_property_value(target_property, comparable_cases, pro_adjustments=pro_adjustments)
-                
-                # 进入预测阶段
-                enable_prediction = data.get('enable_prediction', True)
-                
-                if enable_prediction:
-                    yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成基础估值，通过AI预测进行微调..."}) + "\n"
-                else:
-                    yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成基础估值，跳过AI趋势预测...", "done": True}) + "\n"
+        # 4. 汇总结果并保存为 JSON
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        report_id = f"REPORT_{timestamp}"
+        
+        response_data = {
+            "property_data": property_data,
+            "target_property": target_property,
+            "estimation_result": estimation_result,
+            "total_price": estimation_result['estimated_price'] * property_data['area'],
+            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "report_id": report_id,
+            "pdf_url": None,
+            "embedded_images": {
+                "cert_image": property_data.get('property_cert_image'),
+                "photo_image": property_data.get('property_photo'),
+                "property_photos": property_data.get('property_photos'),
+                "map_image": processed_data.get('original_data', {}).get('map_image', '')
+            }
+        }
+        
+        reports_dir = os.path.join("static", "reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        report_filename = f"property_valuation_report_{timestamp}.json"
+        with open(os.path.join(reports_dir, report_filename), 'w', encoding='utf-8') as f:
+            json.dump(response_data, f, ensure_ascii=False, indent=2)
 
-                trend_factor = 0.0
-                min_trend = 0.0
-                max_trend = 0.0
-                prediction = None
-                
-                if enable_prediction:
-                    try:
-                        address = data.get('address', '')
-                        city = data.get('city', '上海')
-                        region = city + address
-                        currentTime = datetime.now()
-                        beforeTime = currentTime - timedelta(days=180)
-                        afterTime = currentTime + timedelta(days=60)
-                        time_range = f"{beforeTime.strftime('%Y年%m月')}-{afterTime.strftime('%Y年%m月')}"
-                        
-                        query = f"{time_range}, {region}的房价走势如何?"
-                        prediction = predict_region(query, max_retries=2, enable_evolution=False, debug=True)
-                        
-                        if prediction:
-                            min_trend, max_trend, is_segmented, seg_info = extract_trend_factor(prediction)
-                            trend_factor = (min_trend + max_trend) / 2.0
-                    except Exception as e:
-                        print(f"房价预测失败: {str(e)}")
+        return jsonify({"success": True, "data": response_data})
 
-                # 应用趋势调整
-                original_price = estimation_result['estimated_price']
-                if original_price is not None and enable_prediction:
-                    min_adjusted_price = original_price * (1 + min_trend)
-                    max_adjusted_price = original_price * (1 + max_trend)
-                    estimation_result['estimated_price'] = (min_adjusted_price + max_adjusted_price) / 2
-                    estimation_result['original_price'] = original_price
-                    estimation_result['trend_factor'] = trend_factor
-                    estimation_result['price_range'] = [min_adjusted_price, max_adjusted_price]
-                    
-                    if prediction:
-                        # 提取更干净的核心预测文本
-                        short_prediction = prediction.strip()
-                        # 尝试捕获冒号后的核心预测段落 (例如: ...: - 先小幅上升...)
-                        if ":" in short_prediction:
-                            parts = short_prediction.split(":", 1)
-                            short_prediction = parts[1].strip()
-                        if short_prediction.startswith("- "):
-                            short_prediction = short_prediction[2:].strip()
-                        
-                        # 处理单价范围显示，若相同则只显示一个值
-                        adj_price_str = f"{min_adjusted_price:.2f} - {max_adjusted_price:.2f}"
-                        if abs(min_adjusted_price - max_adjusted_price) < 0.01:
-                            adj_price_str = f"{min_adjusted_price:.2f}"
-
-                        estimation_result['explanation'] += f"\n\n【市场趋势调整】\n基于AI对 {region} 区域 {time_range} 的房价趋势预测：\n{short_prediction}\n\n估值已相应调整：\n- 调整前单价：{original_price:.2f} 元/平\n- 调整后单价：{adj_price_str} 元/平"
-                        # 移除了细节分析部分以简化结果显示
-
-                if enable_prediction:
-                    yield json.dumps({"status": "progress", "stage": "predict", "message": "已完成趋势预测与价值微调", "done": True}) + "\n"
-                
-                # 提取一些必要数值
-                area = float(data.get('area', 90))
-                total_price = estimation_result['estimated_price'] * area
-                
-                # 生成报告文件名 (提前生成以便存入 JSON)
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                pdf_filename = f"valuation_report_{timestamp}.pdf"
-                pdf_url = f"/api/reports/{pdf_filename}"
-                
-                # 生成报告 JSON (存入 JSON 时包含 pdf_url)
-                report_path = valuation_system.generate_report(property_data, estimation_result, target_property, price_prediction=prediction, pdf_url=pdf_url)
-                
-                # 生成及保存 PDF 报告
-                reports_dir = os.path.join("static", "reports")
-                os.makedirs(reports_dir, exist_ok=True)
-                pdf_path = os.path.join(reports_dir, pdf_filename)
-                
-                # 构造 Record 对象用于 PDF 生成
-                u_id = 999  # 临时使用的 UID
-                u_record = Record(u_id)
-                u_record.house_location = data.get('address', '未知')
-                u_record.city = data.get('city', '上海')
-                u_record.house_area = area
-                
-                # 填充报告描述信息
-                u_record.client_name = data.get('client_name', '同小舟')
-                u_record.report_logo = data.get('report_logo', '')
-                u_record.surrounding_environment = data.get('surrounding_env', '')
-                u_record.traffic_conditions = data.get('traffic_cond', '')
-                u_record.property_overview = data.get('prop_overview', '')
-                u_record.occupancy_status = data.get('occupancy_status', '')
-                
-                room = data.get('room', 2)
-                hall = data.get('hall', 1)
-                kitchen = data.get('kitchen', 1)
-                bathroom = data.get('bathroom', 1)
-                u_record.house_type = f"{room}室{hall}厅{kitchen}厨{bathroom}卫"
-                
-                u_record.house_year = int(data.get('year', 2015))
-                u_record.house_floor = data.get('floor', '中楼层')
-                u_record.house_decorating = data.get('fitment', '简装')
-                u_record.house_structure = data.get('structure', '平层')
-                u_record.green_rate = green_val
-                u_record.price = estimation_result['estimated_price']
-                
-                # 地图和图片
-                u_record.map = processed_data.get('original_data', {}).get('map_image', '')
-                if data.get('cert_image'):
-                    u_record.production_cert_img = [data.get('cert_image')]
-                    # 如果前端传了表格数据，直接用前端的；否则用文件路径
-                    if data.get('ocr_table'):
-                        # 将列表处理成 save_report 需要的格式
-                        temp_ocr_path = data.get('cert_image').replace('.png', '_tmp.xlsx').replace('.jpg', '_tmp.xlsx').replace('.jpeg', '_tmp.xlsx')
-                        try:
-                            import openpyxl # 确保导入
-                            wb = openpyxl.Workbook()
-                            ws = wb.active
-                            for r_idx, r_data in enumerate(data.get('ocr_table')):
-                                for c_idx, val in enumerate(r_data):
-                                    ws.cell(row=r_idx+1, column=c_idx+1, value=str(val) if val is not None else "")
-                            wb.save(temp_ocr_path)
-                            u_record.production_ocr = temp_ocr_path
-                        except Exception as e:
-                            print(f"临时Excel生成失败: {str(e)}")
-                            u_record.production_ocr = data.get('cert_image').replace('.png', '_OCR.xlsx').replace('.jpg', '_OCR.xlsx').replace('.jpeg', '_OCR.xlsx')
-                    else:
-                        u_record.production_ocr = data.get('cert_image').replace('.png', '_OCR.xlsx').replace('.jpg', '_OCR.xlsx').replace('.jpeg', '_OCR.xlsx')
-                
-                if data.get('property_photo'):
-                    u_record.field_img = [data.get('property_photo')]
-                
-                pdf_gen_success = False
-                try:
-                    pdf_report = property_report(pdf_path, u_record.house_location)
-                    pdf_report.save_report(u_id, u_record)
-                    pdf_gen_success = True
-                except Exception as pdf_error:
-                    print(f"PDF生成失败: {str(pdf_error)}")
-                    import traceback
-                    traceback.print_exc()
-
-                # 构建最终响应 (如果有 pdf_url 则传回)
-                final_pdf_url = pdf_url if pdf_gen_success else None
-                
-                response_data = {
-                    'success': True,
-                    'estimated_price': estimation_result['estimated_price'],
-                    'price_range': estimation_result.get('price_range', [estimation_result['estimated_price'], estimation_result['estimated_price']]),
-                    'confidence': estimation_result['confidence'],
-                    'total_price': total_price,
-                    'total_price_range': [p * area for p in estimation_result.get('price_range', [estimation_result['estimated_price'], estimation_result['estimated_price']])],
-                    'explanation': estimation_result['explanation'],
-                    'report_path': report_path,
-                    'pdf_url': final_pdf_url
-                }
-
-                # --- Cleanup logic (Keep only final JSON and PDF) ---
-                try:
-                    cleanup_files = []
-                    # 1. Certificate and Photo
-                    if data.get('cert_image'): cleanup_files.append(data.get('cert_image'))
-                    if data.get('property_photo'): cleanup_files.append(data.get('property_photo'))
-                    # 2. Map snapshot
-                    if hasattr(u_record, 'map') and u_record.map: cleanup_files.append(u_record.map)
-                    # 3. OCR Excel
-                    if hasattr(u_record, 'production_ocr') and u_record.production_ocr: cleanup_files.append(u_record.production_ocr)
-                    # 4. Temp OCR Excel (if specifically generated as _tmp.xlsx)
-                    try:
-                        if 'temp_ocr_path' in locals() and temp_ocr_path: cleanup_files.append(temp_ocr_path)
-                    except: pass
-                    # 5. Report Logo
-                    if data.get('report_logo'): cleanup_files.append(data.get('report_logo'))
-                    # 6. OCR Tables directory cleanup (e.g. static/ocr_tables/xxx_0_OCR.xlsx)
-                    if data.get('cert_image'):
-                        img_stem = os.path.splitext(os.path.basename(data.get('cert_image')))[0]
-                        ocr_wildcard = os.path.join("static", "ocr_tables", f"{img_stem}*")
-                        cleanup_files.extend(glob.glob(ocr_wildcard))
-                    
-                    for f in set(cleanup_files):
-                        if not f: continue
-                        # 处理路径，移除开头的斜杠
-                        norm_f = f.lstrip('/\\').replace('\\', '/')
-                        if os.path.exists(norm_f):
-                            # Safety check: do not delete from static/reports
-                            if "static/reports" not in norm_f:
-                                os.remove(norm_f)
-                                print(f"Cleaned up temp file: {norm_f}")
-                except Exception as ce:
-                    print(f"Cleanup error: {ce}")
-
-                yield json.dumps({"status": "success", "result": response_data}) + "\n"
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                yield json.dumps({"status": "error", "message": str(e)}) + "\n"
-
-        return Response(stream_with_context(generate()), mimetype='application/x-ndjson')
-    
     except Exception as e:
-        print(f"估值失败: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/generate_pdf', methods=['POST'])
+def api_generate_pdf():
+    """按需生成 PDF 报告"""
+    try:
+        data = request.get_json()
+        report_id = data.get('report_id')
+        if not report_id: return jsonify({"success": False, "error": "Missing report_id"}), 400
+        
+        # 提取时间戳 logic update
+        timestamp = report_id
+        if timestamp.startswith('REPORT_'):
+            timestamp = timestamp.replace('REPORT_', '')
+        elif timestamp.startswith('property_valuation_report_'):
+             timestamp = timestamp.replace('property_valuation_report_', '')
+             
+        json_path = os.path.join("static", "reports", f"property_valuation_report_{timestamp}.json")
+        
+        if not os.path.exists(json_path):
+            return jsonify({"success": False, "error": "Report data not found"}), 404
+            
+        with open(json_path, 'r', encoding='utf-8') as f:
+            report_data = json.load(f)
+            
+        from record.record import Record
+        u_record = Record(999) 
+        u_record.house_location = report_data['property_data']['address']
+        u_record.city = report_data['property_data']['city']
+        u_record.house_area = report_data['property_data']['area']
+        u_record.client_name = data.get('client_name', report_data['target_property'].get('client_name','同小舟'))
+        
+        def clean_img_path(p):
+            """清理图片路径，处理 http URL 和绝对路径"""
+            if not isinstance(p, str): return p
+            # 如果是完整 URL，去掉协议和域名
+            if p.startswith('http'):
+                from urllib.parse import urlparse
+                try:
+                    p = urlparse(p).path
+                except: pass
+            # 去掉开头的 / 以便匹配本地相对路径
+            return p.lstrip('/') if p.startswith('/') else p
+
+        u_record.report_logo = clean_img_path(data.get('report_logo', ''))
+        
+        # Store these in u_record if Record supports them and save to json potentially
+        u_record.surrounding_environment = data.get('surrounding', '')
+        u_record.traffic_conditions = data.get('traffic', '')
+        u_record.property_overview = data.get('property_overview', '')
+        u_record.occupancy_status = data.get('occupancy', '')
+        
+        # Save extended info back to json so it persists if needed (optional but good practice)
+        report_data['extended_info'] = {
+            'client_name': u_record.client_name,
+            'report_logo': u_record.report_logo,
+            'surrounding': u_record.surrounding_environment,
+            'traffic': u_record.traffic_conditions,
+            'property_overview': u_record.property_overview,
+            'occupancy': u_record.occupancy_status
+        }
+        
+        u_record.house_type = report_data['property_data']['house_type']
+        u_record.price = report_data['estimation_result']['estimated_price']
+        u_record.explanation = report_data['estimation_result']['explanation']
+        u_record.map = report_data['embedded_images'].get('map_image', '')
+
+        # 处理可能的列表或字符串 cert_image 并移除路径前导斜杠
+        raw_cert = report_data['embedded_images'].get('cert_image')
+        if raw_cert:
+            if isinstance(raw_cert, list):
+                u_record.production_cert_img = [clean_img_path(p) for p in raw_cert]
+            else:
+                u_record.production_cert_img = [clean_img_path(raw_cert)]
+        else:
+            u_record.production_cert_img = []
+
+        # 处理多张房屋图片
+        raw_photos = report_data['embedded_images'].get('property_photos')
+        if not raw_photos:
+             # Fallback to single photo if list is missing (legacy data)
+             single = report_data['embedded_images'].get('photo_image')
+             raw_photos = [single] if single else []
+
+        if raw_photos:
+             u_record.field_img = [clean_img_path(p) for p in raw_photos]
+        else:
+             u_record.field_img = []
+
+        pdf_filename = f"valuation_report_{timestamp}.pdf"
+        pdf_path = os.path.join("static", "reports", pdf_filename)
+        
+        from report.report_gen import property_report
+        pdf_gen = property_report(pdf_path, u_record.house_location)
+        pdf_gen.save_report(999, u_record)
+             
+        report_data['pdf_url'] = f"/api/reports/{pdf_filename}"
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(report_data, f, ensure_ascii=False, indent=2)
+            
+        return jsonify({"success": True, "pdf_url": report_data['pdf_url']})
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/reports/<filename>')
 def get_report(filename):
@@ -787,5 +686,199 @@ def view_report(filename):
     except Exception as e:
         return render_template('error.html', error=f"读取报告失败: {str(e)}")
 
+@app.route('/api/history', methods=['GET'])
+def api_get_history():
+    """获取所有历史评估报告列表"""
+    try:
+        reports_dir = os.path.join("static", "reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        
+        reports_list = []
+        # 同时查找 .json 报告
+        for filename in os.listdir(reports_dir):
+            if filename.endswith('.json'):
+                file_path = os.path.join(reports_dir, filename)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        report_data = json.load(f)
+                    
+                    # 提取列表展示所需的简要信息
+                    reports_list.append({
+                        'id': filename.replace('.json', ''),
+                        'address': report_data.get('property_data', {}).get('address', '未知地址'),
+                        'city': report_data.get('property_data', {}).get('city', '上海'),
+                        'area': report_data.get('property_data', {}).get('area', 0),
+                        'house_type': report_data.get('property_data', {}).get('house_type', ''),
+                        'estimated_price': report_data.get('estimation_result', {}).get('estimated_price', 0),
+                        'total_price': report_data.get('estimation_result', {}).get('estimated_price', 0) * report_data.get('target_property', {}).get('size', 100),
+                        'generated_at': report_data.get('generated_at', ''),
+                        'pdf_url': report_data.get('pdf_url', '')
+                    })
+                except:
+                    continue
+        
+        # 按时间倒序排序
+        reports_list.sort(key=lambda x: x['generated_at'], reverse=True)
+        return jsonify({"success": True, "list": reports_list})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/upload/logo', methods=['POST'])
+def api_upload_logo():
+    """上传Logo API"""
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': '没有文件部分'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': '没有选择文件'})
+        
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        new_filename = f"logo_{timestamp}_{filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+        file.save(file_path)
+        
+        return jsonify({
+            'success': True,
+            'url': f"/static/uploads/{new_filename}" 
+        })
+    return jsonify({'success': False, 'error': '不允许的文件类型'})
+
+@app.route('/api/upload/cert', methods=['POST'])
+def api_upload_cert():
+    """专门为房产证设计的上传 + 裁剪(可选) + OCR 解析 + LLM 提取"""
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': '没有图片文件'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': '文件名为空'})
+    
+    if file and allowed_file(file.filename):
+        # 安全地保存文件
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        new_filename = f"cert_{timestamp}_{filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+        file.save(file_path)
+        
+        # 1. 执行 OCR 解析
+        ocr_processor = OCR_Table()
+        raw_text_content = ""
+        try:
+            # 获取文本内容用于 LLM
+            result_str = ocr_processor.trans_to_str(file_path)
+            if result_str:
+                res_obj = json.loads(result_str)
+                raw_text_content = res_obj.get('body', {}).get('Data', {}).get('Content', '')
+        except Exception as e:
+            print(f"OCR 文本提取失败: {str(e)}")
+
+        # 2. 调用 LLM 转换为 Key-Value JSON
+        structured_data = []
+        if raw_text_content:
+            try:
+                from llm.llm_manager import QianwenManager
+                llm = QianwenManager()
+                prompt = """你是一个专业的房产数据助手。我会给你一段房产证OCR识别出的乱序文本，请你提取其中的关键信息并以JSON格式返回。
+                要求：
+                1. 返回格式必须是一个 JSON 数组，每个元素包含 'field' (字段名) 和 'value' (对应内容)。
+                2. 必须包含的字段：房产地址、城市、建筑面积、户型、建成年份、权利人、共有情况、登记日期。
+                3. 如果某项不存在，value 设为空字符串。
+                4. 只返回 JSON 代码块，不要有其他解释。"""
+                
+                llm_reply = llm.interact_qwen(prompt, raw_text_content)
+                
+                # 提取 JSON 部分
+                json_match = re.search(r'\[.*\]', llm_reply, re.DOTALL)
+                if json_match:
+                    structured_data = json.loads(json_match.group(0))
+            except Exception as e:
+                print(f"LLM 结构化处理失败: {str(e)}")
+
+        # 如果 LLM 失败，回退到基础 OCR 表格数据
+        if not structured_data:
+            try:
+                xlsx_paths = ocr_processor.trans_to_xlsx(new_filename)
+                for xlsx_path in xlsx_paths:
+                    raw_table_list = ocr_processor.trans_to_df(xlsx_path)
+                    if raw_table_list:
+                        for sheet_data in raw_table_list:
+                            for r in sheet_data:
+                                if any(x is not None and str(x).strip() != "" for x in r):
+                                    structured_data.append({
+                                        "field": str(r[0]).strip() if len(r) > 0 else "",
+                                        "value": str(r[1]).strip() if len(r) > 1 else ""
+                                    })
+            except: pass
+
+        return jsonify({
+            'success': True,
+            'url': f"http://127.0.0.1:5000/static/uploads/{new_filename}", # 使用完整 URL 解决前端显示问题
+            'file_path': file_path,
+            'table_data': structured_data  # 统一返回 JSON 对象数组
+        })
+    return jsonify({'success': False, 'error': '不支持此类文件格式'})
+
+@app.route('/api/generate_report_content', methods=['POST'])
+def api_generate_report_content():
+    """生成报告默认内容"""
+    try:
+        data = request.get_json()
+        city = data.get('city', '上海')
+        address = data.get('address')
+        house_type = data.get('house_type', '')
+        area = data.get('area', '')
+        
+        if not address:
+            return jsonify({"success": False, "error": "Missing address"}), 400
+            
+        from record.save_map import get_origin_place, get_nearby_places
+        from llm.llm_manager import QianwenManager
+        
+        location, _ = get_origin_place(address, city, 1)
+        if not location:
+            # Fallback mock data or simple retry
+             return jsonify({"success": True, "data": {
+                "surrounding": f"位于{city}市区，周边生活配套便利。",
+                "traffic": "交通便利，有多条公交线路。",
+                "property_overview": f"建筑面积{area}平米，{house_type}。",
+                "occupancy": "目前状况良好。"
+            }})
+
+        # Fetch POI
+        nearby_places = get_nearby_places(location, '住宅区')
+        hospitals = get_nearby_places(location, '医院')
+        schools = get_nearby_places(location, '学校')
+        transportation = get_nearby_places(location, '公交车站') + get_nearby_places(location, '地铁站')
+        
+        qm = QianwenManager()
+        
+        # Surrounding
+        surrounding_prompt = f"已知住宅跟前有{','.join(nearby_places[:5])}等小区，附近有{','.join(hospitals[:3])}等医疗资源，{','.join(schools[:3])}等教育资源。请用一句话概括其临近环境及建筑物情况，语气专业客观。"
+        surrounding_text = qm.interact_qwen(prompt="你是一位专业的房产评估师。", request=surrounding_prompt)
+        
+        # Traffic
+        traffic_prompt = f"已知附近有{','.join(transportation[:5])}等交通设施。请用一句话概括其交通条件，语气专业客观。"
+        traffic_text = qm.interact_qwen(prompt="你是一位专业的房产评估师。", request=traffic_prompt)
+        
+        # Overview - Template based
+        overview_text = f"该物业坐落于{city}{address}，房屋类型为{house_type}，建筑面积{area}平方米。房屋维护状况良好，配套设施完善。"
+        occupancy_text = "目前该物业处于自用状态，空置时间较短，室内维护保养较好。"
+
+        return jsonify({"success": True, "data": {
+            "surrounding": surrounding_text.replace('"','').strip(),
+            "traffic": traffic_text.replace('"','').strip(),
+            "property_overview": overview_text,
+            "occupancy": occupancy_text
+        }})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000) 
+    app.run(debug=True, host='127.0.0.1', port=5000) 

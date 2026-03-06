@@ -9,6 +9,9 @@ import argparse
 import base64
 from datetime import datetime
 
+import time
+from functools import wraps
+
 # 确保可以导入其他模块
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -84,31 +87,38 @@ class PropertyValuationSystem:
         处理房产数据
         
         Args:
-            property_data: 房产数据，包含以下字段：
-                - property_cert_image: 房产证图片路径（可选）
-                - property_photo: 房屋外观图片路径（可选）
-                - property_text: 房产描述文本（可选）
-                - address: 房产地址
-                - city: 所在城市
+            property_data: 房产数据
             
         Returns:
             dict: 处理结果
         """
         print("处理房产数据...")
         
-        # 使用多模态编码器处理房产数据
+        # 1. 使用多模态编码器处理房产数据 (主要是地理编码和地图生成)
+        start_multimodal = time.time()
         multimodal_result = self.multimodal_encoder.process_property_data(
-            property_cert_image=property_data.get('property_cert_image'),
-            property_photo=property_data.get('property_photo'),
-            property_text=property_data.get('property_text'),
             address=property_data.get('address'),
             city=property_data.get('city')
         )
         
-        # 使用LLM增强信息
-        enhanced_result = self.llm_enhancer.process_and_enhance(multimodal_result)
+        # 2. 跳过 LLM 增强环节，直接构建返回结果
+        # 既然数据在前端已经由用户根据 OCR 结果确认过，这里不再进行二次 LLM 仲裁
+        result = {
+            "original_data": multimodal_result,
+            "enhanced_data": {
+                "property_info": {
+                    "location": property_data.get('address'),
+                    "area": property_data.get('area'),
+                    "type": property_data.get('house_type'),
+                    "year": property_data.get('year'),
+                    "floor": property_data.get('floor'),
+                    "decoration": property_data.get('fitment'),
+                    "structure": property_data.get('structure')
+                }
+            }
+        }
         
-        return enhanced_result
+        return result
     
     def estimate_property_value(self, target_property, comparable_cases=None, pro_adjustments=None):
         """

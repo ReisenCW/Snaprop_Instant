@@ -356,8 +356,19 @@ class IMCA:
         p = estimation_result['estimated_price']
         conf = estimation_result['confidence']
         results = estimation_result['details'].get('results', [])
+        weights = estimation_result['details'].get('weights', [])
         
-        explanation = f"### 智能化市场比较法 (IMCA) 估值深度报告\n\n"
+        # Sort results by similarity descending
+        # Zip all lists together to sort based on similarity
+        if results and weights and len(comparable_cases) == len(results):
+            combined = list(zip(results, weights, comparable_cases))
+            combined.sort(key=lambda x: x[0].get('similarity', 0), reverse=True)
+            results, weights, comparable_cases = zip(*combined)
+            # Update the estimation result with sorted details
+            estimation_result['details']['results'] = list(results)
+            estimation_result['details']['weights'] = list(weights)
+
+        explanation = f"### 智能化市场比较法 (IMCA) 估值深度分析\n\n"
         explanation += f"本次评估采用 **IMCA 算法**，通过多维度非线性修正得出目标房产的参考单价。\n\n"
         explanation += f"**[核心结论]**:\n- **预估单价**: `{p:,.2f}` 元/㎡\n"
         explanation += f"- **综合置信度**: `{conf:.2%}` ({'可靠性高' if conf > 0.8 else ('可靠性中等' if conf > 0.5 else '仅供参考建议')})\n\n"
@@ -376,7 +387,9 @@ class IMCA:
             year = self._get_mapped_val(case, 'year', '-')
             struct = case.get('structure', '-')
             green = case.get('green_rate', '-')
-            h_type = case.get('house_type', '-')
+            h_type = self._get_mapped_val(case, 'type', '-') 
+            if h_type == '-' or not isinstance(h_type, str):
+                h_type = case.get('house_type', '-')
             
             # Format numeric values
             size_str = f"{float(size):.2f}" if size != '-' else '-'

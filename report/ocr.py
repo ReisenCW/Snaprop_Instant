@@ -69,29 +69,14 @@ class OCR_Table:
         except Exception as error:
             # 此处仅做打印展示，请谨慎对待异常处理，在工程项目中切勿直接忽略异常。
             # 错误 message
-            print(error.message)
+            if hasattr(error, 'message'):
+                print(error.message)
             # 诊断地址
-            print(error.data.get("Recommend"))
-            UtilClient.assert_as_string(error.message)
+            if hasattr(error, 'data') and error.data.get("Recommend"):
+                print(error.data.get("Recommend"))
+            return None
 
-    def trans_to_urls(self, img_path) -> list:
-        json_res = json.loads(self.trans_to_str(img_path))
-        urls = []
-        if "body" in json_res and "Data" in json_res["body"] and "SubImages" in json_res["body"]["Data"]:
-            for sub_img in json_res["body"]["Data"]["SubImages"]:
-                if "TableInfo" in sub_img and "TableExcel" in sub_img["TableInfo"]:
-                    urls.append(sub_img["TableInfo"]["TableExcel"])
-        return urls
-
-    def trans_to_path(self, img_path, index=0):
-        filename = f"{Path(img_path).stem}_{index}_OCR.xlsx"
-        filepath = f"{OCR_PATH}/{filename}"
-        return filepath
-
-    def trans_to_xlsx(self, img_name):
-        img_path = f"{UPLOAD_FOLDER}/{img_name}"
-        urls = self.trans_to_urls(img_path)
-        
+    def download_xlsx(self, urls, img_name):
         save_paths = []
         for i, url in enumerate(urls):
             response = requests.get(url, timeout=10)
@@ -100,8 +85,12 @@ class OCR_Table:
             with open(save_path, 'wb') as f:
                 f.write(response.content)
             save_paths.append(save_path)
-
         return save_paths
+
+    def trans_to_xlsx(self, img_name):
+        img_path = f"{UPLOAD_FOLDER}/{img_name}"
+        urls = self.trans_to_urls(img_path)
+        return self.download_xlsx(urls, img_name)
 
     # def trans_to_dict(self, save_path) -> dict:
     #     wb = openpyxl.load_workbook(save_path)

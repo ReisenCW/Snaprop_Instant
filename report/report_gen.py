@@ -1,6 +1,8 @@
 import datetime
 import cn2an
 import os
+import base64
+import hashlib
 import pandas as pd
 from reportlab.lib.colors import black
 from reportlab.pdfgen import canvas
@@ -19,6 +21,8 @@ from database.mysql_manager import MySQLManager
 from config.path_config import REPORT_PATH
 from record.save_map import environment_main
 from datetime import datetime, date
+import base64
+import hashlib
 
 pdfmetrics.registerFont(TTFont("SimHei", "SimHei.ttf"))
 pdfmetrics.registerFont(TTFont("SimSun", "SimSun.ttc"))
@@ -712,9 +716,10 @@ class property_report:
                     self.template["目录"][app_title] = page_n
                     
                     for img in img_list:
-                        if not img or not os.path.exists(img):
+                        processed_img = self._save_base64_image(img)
+                        if not processed_img:
                             continue
-                        y, page_n = self._draw_appendix_image(img, start_x, y, min_y, start_y, page_n)
+                        y, page_n = self._draw_appendix_image(processed_img, start_x, y, min_y, start_y, page_n)
 
                     y, page_n = start_y, page_n + 1
                 continue
@@ -796,6 +801,7 @@ class property_report:
             return y - h, page_n
         except Exception as e:
             print(f"绘制附录图片失败: {e}")
+            return y, page_n
             return y, page_n
 
     def _draw_toc_tables(self, tables, start_x, y, min_y, start_y, page_n, sub_w, sub_size, con_w, con_size):
@@ -931,18 +937,84 @@ class property_report:
         self.set_up_down_label(logo_img, index=report_index)
         self.result.generate()
 
+    def _save_base64_image(self, b64_str):
+        """处理Base64图片并保存为临时文件，同时增强对本地路径的检查"""
+        if not b64_str or not isinstance(b64_str, str):
+            return None
+            
+        # 1. 尝试直接检查本地文件 (标准化路径以兼容 Windows)
+        norm_path = os.path.normpath(b64_str)
+        if len(norm_path) < 260 and os.path.exists(norm_path):
+            return os.path.abspath(norm_path)
+            
+        # 2. 尝试拼接当前工作目录 (有时候是相对路径问题)
+        abs_path = os.path.abspath(norm_path)
+        if len(abs_path) < 260 and os.path.exists(abs_path):
+            return abs_path
+
+        # 如果不是Base64格式，返回None
+        if not b64_str.startswith('data:image'):
+            # 最后的尝试：如果是文件名，尝试去 static/uploads 找
+            if not os.path.dirname(norm_path):
+                 try_upload = os.path.join("static", "uploads", norm_path)
+                 if os.path.exists(try_upload): return os.path.abspath(try_upload)
+            
+            # 尝试去除第一个目录（防备 /static/uploads/xx 变成 static/static/uploads/xx）
+            if norm_path.startswith('static') or norm_path.startswith(os.sep + 'static'):
+                 # Ensure proper join with CWD if needed, but abspath handles it.
+                 pass
+
+            # Debug output to console to trace why image is missing
+            print(f"[Warning] Image not found: {b64_str} | Norm: {norm_path} | Abs: {abs_path}")
+            return None
+        
+        try:
+            # 解析Base64
+            if ';base64,' in b64_str:
+                header, data = b64_str.split(';base64,')
+            else:
+                return None
+                
+            ext = header.split('/')[-1]
+            if ext == 'jpeg': ext = 'jpg'
+            
+            # 创建临时目录
+            # 尝试使用 static/reports/temp_images
+            temp_dir = os.path.join("static", "reports", "temp_images")
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir, exist_ok=True)
+            
+            # 使用哈希做文件名
+            file_hash = hashlib.md5(data.encode()).hexdigest()
+            file_path = os.path.join(temp_dir, f"{file_hash}.{ext}")
+            
+            # 如果文件不存在则写入
+            if not os.path.exists(file_path):
+                with open(file_path, "wb") as f:
+                    f.write(base64.b64decode(data))
+            
+            return file_path
+        except Exception as e:
+            print(f"Base64 image save error: {e}")
+            return None
+
     def save_report(self, uid: int, record: Record):
         # 优先使用 record 中上传的 logo，如果没有则使用默认 logo
+        logo_img = "report/logo_img.png"
         if record.report_logo:
-             # report_logo 可能是路径或文件名，如果是文件名需拼接
-             if os.path.isabs(record.report_logo) or "/" in record.report_logo or "\\" in record.report_logo:
+             processed_logo = self._save_base64_image(record.report_logo)
+             if processed_logo:
+                 logo_img = processed_logo
+             elif len(record.report_logo) < 260 and (os.path.isabs(record.report_logo) or "/" in record.report_logo or "\\" in record.report_logo):
                  logo_img = record.report_logo
              else:
-                 logo_img = os.path.join("static/uploads", record.report_logo)
-        else:
-             logo_img = "report/logo_img.png"
+                 p = os.path.join("static/uploads", record.report_logo)
+                 if os.path.exists(p): logo_img = p
              
-        cover_img = record.field_img[0] if record.field_img else None
+        # 处理封面图 (field_img[0])
+        cover_img = None
+        if record.field_img and len(record.field_img) > 0:
+            cover_img = self._save_base64_image(record.field_img[0])
         
         # 优先使用 record 中的委托人姓名
         if record.client_name:

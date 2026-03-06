@@ -5,6 +5,8 @@ import json
 import numpy as np
 from llm.llm_manager import QianwenManager
 
+import time
+
 class LLMEnhancer:
     """
     LLM增强信息获取模块，使用大语言模型增强房产数据
@@ -202,6 +204,7 @@ class LLMEnhancer:
         preprocessed_data = self.preprocess_data(visual_data, text_data, geo_data, poi_data)
         
         # 使用LLM增强数据
+        start_llm_call = time.time()
         enhanced_data = self.enhance_with_llm(preprocessed_data)
         
         # 合并原始数据和增强数据
@@ -209,5 +212,6 @@ class LLMEnhancer:
             "original_data": multimodal_data,
             "enhanced_data": enhanced_data
         }
+        return result
         
         return result 
