@@ -17,6 +17,24 @@ export const houseStore = reactive({
   year: '',
   enablePrediction: false, // 是否开启大语言模型预测微调
 
+  // Auth state
+  user: JSON.parse(localStorage.getItem('user')) || null,
+  isAuthenticated: !!localStorage.getItem('user'),
+
+  // Login action
+  async login(userData) {
+    this.user = userData
+    this.isAuthenticated = true
+    localStorage.setItem('user', JSON.stringify(userData))
+  },
+
+  // Logout action
+  logout() {
+    this.user = null
+    this.isAuthenticated = false
+    localStorage.removeItem('user')
+  },
+
   // Reset function
   reset() {
     this.address = ''

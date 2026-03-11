@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { houseStore } from '@/store'
 import { View, Search, Calendar, House, Download, Refresh, ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -17,9 +18,13 @@ const showReportDialog = ref(false)
 const currentReportForPdf = ref(null)
 
 const fetchReports = async () => {
+  if (!houseStore.user?.username) {
+    ElMessage.warning('请先登录以查看您的历史记录')
+    return
+  }
   isLoading.value = true
   try {
-    const response = await getHistory()
+    const response = await getHistory(houseStore.user.username)
     if (response.data && response.data.success) {
       reports.value = response.data.list
     } else {

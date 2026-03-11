@@ -61,7 +61,11 @@ const fetchValuation = async () => {
 
   try {
     isLoading.value = true
-    const response = await startValuation(houseInfo.valuationData)
+    const payload = {
+      ...houseInfo.valuationData,
+      username: houseStore.user?.username || 'admin'
+    }
+    const response = await startValuation(payload)
     if (response && response.data && response.data.success) {
       valuationResult.value = response.data.data
       reportId.value = response.data.data.report_id || 'RE-' + Date.now().toString().slice(-6)

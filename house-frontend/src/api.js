@@ -18,8 +18,8 @@ export const startValuation = (data) => {
   return apiClient.post('/api/valuation', data)
 }
 
-export const getHistory = () => {
-  return apiClient.get('/api/history')
+export const getHistory = (username) => {
+  return apiClient.get('/api/history', { params: { username } })
 }
 
 export const getReportDetail = (id) => {

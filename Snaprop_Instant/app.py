@@ -147,6 +147,211 @@ def upload_file():
         })
     
     return jsonify({'success': False, 'error': '不允许的文件类型'})
+    
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    """登录API"""
+    try:
+        data = request.get_json()
+        account = data.get('account') # 账号或邮箱
+        password = data.get('password')
+        
+        if not account or not password:
+            return jsonify({"success": False, "error": "请提供账号和密码"}), 400
+            
+        mysql_manager = MySQLManager()
+        user = mysql_manager.find_user(account)
+        mysql_manager.close()
+        
+        if user and user['password'] == password:
+            # 简单返回用户信息，生产环境应使用 JWT 等
+            return jsonify({
+                "success": True,
+                "user": {
+                    "id": user['id'],
+                    "username": user['username'],
+                    "email": user['email']
+                }
+            })
+        else:
+            return jsonify({"success": False, "error": "账号或密码错误"}), 401
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    """注册API"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        confirm_password = data.get('confirm_password')
+        
+        if not all([username, email, password, confirm_password]):
+            return jsonify({"success": False, "error": "请填写完整信息"}), 400
+            
+        if password != confirm_password:
+            return jsonify({"success": False, "error": "两次输入的密码不一致"}), 400
+            
+        mysql_manager = MySQLManager()
+        # 检查是否已存在
+        if mysql_manager.find_user(username) or mysql_manager.find_user(email):
+            mysql_manager.close()
+            return jsonify({"success": False, "error": "用户名或邮箱已存在"}), 400
+            
+        success = mysql_manager.create_user(username, email, password)
+        mysql_manager.close()
+        
+        if success:
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "注册失败，请稍后再试"}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/change_password', methods=['POST'])
+def api_change_password():
+    """修改密码API"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+        
+        if not all([username, old_password, new_password]):
+            return jsonify({"success": False, "error": "请提供完整信息"}), 400
+            
+        mysql_manager = MySQLManager()
+        success, message = mysql_manager.update_password(username, old_password, new_password)
+        mysql_manager.close()
+        
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"success": False, "error": message}), 401
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- Admin APIs ---
+
+@app.route('/api/admin/users', methods=['GET', 'DELETE'])
+def api_admin_users():
+    """管理员：用户管理"""
+    try:
+        mysql_manager = MySQLManager()
+        if request.method == 'GET':
+            users = mysql_manager.get_all_users()
+            mysql_manager.close()
+            return jsonify({"success": True, "users": users})
+        
+        elif request.method == 'DELETE':
+            username = request.args.get('username')
+            if not username:
+                return jsonify({"success": False, "error": "缺少用户名"}), 400
+            success = mysql_manager.delete_user(username)
+            mysql_manager.close()
+            return jsonify({"success": success})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/reports', methods=['GET', 'DELETE'])
+def api_admin_reports():
+    """管理员：报告管理"""
+    try:
+        mysql_manager = MySQLManager()
+        if request.method == 'GET':
+            reports = mysql_manager.get_all_reports()
+            mysql_manager.close()
+            return jsonify({"success": True, "reports": reports})
+        
+        elif request.method == 'DELETE':
+            report_id = request.args.get('report_id')
+            if not report_id:
+                return jsonify({"success": False, "error": "缺少报告ID"}), 400
+            success = mysql_manager.delete_report(report_id)
+            mysql_manager.close()
+            return jsonify({"success": success})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/upload_excel', methods=['POST'])
+def api_admin_upload_excel():
+    """管理员：通过Excel批量导入房产数据"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({"success": False, "error": "请选择文件"}), 400
+        
+        file = request.files['file']
+        city = request.form.get('city')
+        
+        if file.filename == '' or not city:
+            return jsonify({"success": False, "error": "文件或城市信息缺失"}), 400
+            
+        # 临时保存文件
+        uploads_dir = os.path.join("static", "uploads")
+        os.makedirs(uploads_dir, exist_ok=True)
+        temp_path = os.path.join(uploads_dir, file.filename)
+        file.save(temp_path)
+        
+        # 调用 MySQLManager 导入数据
+        mysql_manager = MySQLManager()
+        mysql_manager.insert(city, temp_path)
+        mysql_manager.close()
+        
+        return jsonify({"success": True, "message": f"成功导入 {city} 房产数据"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/manual_entry', methods=['POST'])
+def api_admin_manual_entry():
+    """管理员：手动单条录入房产数据"""
+    try:
+        data = request.get_json()
+        city = data.get('city')
+        if not city:
+            return jsonify({"success": False, "error": "城市必填"}), 400
+            
+        mysql_manager = MySQLManager()
+        success = mysql_manager.insert_manual_record(city, data)
+        mysql_manager.close()
+        
+        return jsonify({"success": success})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/cities', methods=['GET'])
+def api_get_cities():
+    """获取所有已支持的城市列表"""
+    try:
+        mysql_manager = MySQLManager()
+        cities = mysql_manager.get_all_cities_list()
+        mysql_manager.close()
+        return jsonify({"success": True, "cities": cities})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/add_city', methods=['POST'])
+def api_admin_add_city():
+    """管理员：添加新城市"""
+    try:
+        data = request.get_json()
+        city_name = data.get('city_name')
+        table_name = data.get('table_name')
+        intro = data.get('introduction', '')
+        detail = data.get('detail', '')
+        
+        if not city_name or not table_name:
+            return jsonify({"success": False, "error": "城市名称和表名必填"}), 400
+            
+        mysql_manager = MySQLManager()
+        success = mysql_manager.add_new_city(city_name, table_name, intro, detail)
+        mysql_manager.close()
+        
+        return jsonify({"success": success})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/get_surrounding', methods=['POST'])
@@ -514,6 +719,26 @@ def api_valuation():
         with open(os.path.join(reports_dir, report_filename), 'w', encoding='utf-8') as f:
             json.dump(response_data, f, ensure_ascii=False, indent=2)
 
+        # 5. 保存元数据到数据库以实现用户隔离
+        try:
+            username = data.get('username', 'admin') # 生产环境应用 session/token
+            mysql_manager = MySQLManager()
+            mysql_manager.save_user_report({
+                'username': username,
+                'report_id': report_id,
+                'address': property_data['address'],
+                'city': property_data['city'],
+                'area': property_data['area'],
+                'house_type': property_data['house_type'],
+                'estimated_price': estimation_result['estimated_price'],
+                'total_price': estimation_result['estimated_price'] * property_data['area'],
+                'generated_at': datetime.now(),
+                'pdf_url': None
+            })
+            mysql_manager.close()
+        except Exception as db_err:
+            print(f"Database save error: {db_err}")
+
         return jsonify({"success": True, "data": response_data})
 
     except Exception as e:
@@ -619,6 +844,13 @@ def api_generate_pdf():
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(report_data, f, ensure_ascii=False, indent=2)
             
+        # 同时更新数据库中的 PDF URL
+        try:
+            mysql_manager = MySQLManager()
+            mysql_manager.update_report_pdf(report_id, report_data['pdf_url'])
+            mysql_manager.close()
+        except: pass
+            
         return jsonify({"success": True, "pdf_url": report_data['pdf_url']})
         
     except Exception as e:
@@ -688,37 +920,16 @@ def view_report(filename):
 
 @app.route('/api/history', methods=['GET'])
 def api_get_history():
-    """获取所有历史评估报告列表"""
+    """获取指定用户的历史评估报告列表"""
     try:
-        reports_dir = os.path.join("static", "reports")
-        os.makedirs(reports_dir, exist_ok=True)
+        username = request.args.get('username')
+        if not username:
+            return jsonify({"success": False, "error": "Missing username"}), 400
+            
+        mysql_manager = MySQLManager()
+        reports_list = mysql_manager.get_user_history(username)
+        mysql_manager.close()
         
-        reports_list = []
-        # 同时查找 .json 报告
-        for filename in os.listdir(reports_dir):
-            if filename.endswith('.json'):
-                file_path = os.path.join(reports_dir, filename)
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        report_data = json.load(f)
-                    
-                    # 提取列表展示所需的简要信息
-                    reports_list.append({
-                        'id': filename.replace('.json', ''),
-                        'address': report_data.get('property_data', {}).get('address', '未知地址'),
-                        'city': report_data.get('property_data', {}).get('city', '上海'),
-                        'area': report_data.get('property_data', {}).get('area', 0),
-                        'house_type': report_data.get('property_data', {}).get('house_type', ''),
-                        'estimated_price': report_data.get('estimation_result', {}).get('estimated_price', 0),
-                        'total_price': report_data.get('estimation_result', {}).get('estimated_price', 0) * report_data.get('target_property', {}).get('size', 100),
-                        'generated_at': report_data.get('generated_at', ''),
-                        'pdf_url': report_data.get('pdf_url', '')
-                    })
-                except:
-                    continue
-        
-        # 按时间倒序排序
-        reports_list.sort(key=lambda x: x['generated_at'], reverse=True)
         return jsonify({"success": True, "list": reports_list})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

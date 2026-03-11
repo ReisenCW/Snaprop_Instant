@@ -6,6 +6,8 @@ import ReportDetailView from '../views/ReportDetailView.vue'
 import StepOne from '../views/home/StepOne.vue'
 import StepTwo from '../views/home/StepTwo.vue'
 import StepThree from '../views/home/StepThree.vue'
+import LoginView from '../views/LoginView.vue'
+import { houseStore } from '../store'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -50,7 +52,29 @@ const router = createRouter({
       name: 'report-detail',
       component: ReportDetailView,
     },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('../views/AdminView.vue')
+    },
+    {
+      path: '/login',
+      name: 'login',
+      component: LoginView,
+    },
   ],
+})
+
+router.beforeEach((to, from, next) => {
+  const publicPages = ['/', '/login']
+  const authRequired = !publicPages.includes(to.path)
+  const loggedIn = houseStore.isAuthenticated
+
+  if (authRequired && !loggedIn) {
+    return next('/login')
+  }
+
+  next()
 })
 
 export default router
