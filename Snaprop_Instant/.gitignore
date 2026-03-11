@@ -1,7 +1,0 @@
-.idea/
-.github/
-__pycache__/
-answer/
-.venv/
-cot_trajectory.json
-reflection_history.json
