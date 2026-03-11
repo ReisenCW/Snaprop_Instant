@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>估值结果详情 - 房估宝</title>
+  </head>
+  <body>
+    {% extends "base.html" %} {% block title %}估值结果详情 - 房估宝{% endblock
+    %} {% block extra_css %}
+    <style>
+      .module-header {
+        border-left: 5px solid #0d6efd;
+        padding-left: 15px;
+        margin-bottom: 20px;
+        background-color: #f8f9fa;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        border-radius: 0 5px 5px 0;
+      }
+      .module-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #0d6efd;
+        margin-bottom: 0;
+      }
+      .explanation-text {
+        line-height: 1.6;
+        color: #495057;
+      }
+      .factor-item {
+        margin-bottom: 10px;
+        padding: 8px;
+        border-radius: 4px;
+        background-color: #f1f3f5;
+      }
+
+      /* Markdown Table & Content Styling */
+      .markdown-content {
+        overflow-x: auto;
+        max-width: 100%;
+      }
+      .markdown-content table {
+        width: 100%;
+        min-width: 1000px;
+        border-collapse: collapse;
+        margin-bottom: 1rem;
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        font-size: 0.95rem;
+      }
+      .markdown-content th,
+      .markdown-content td {
+        padding: 0.75rem;
+        vertical-align: top;
+        border: 1px solid #dee2e6;
+      }
+      .markdown-content th {
+        background-color: #f8f9fa;
+        font-weight: bold;
+      }
+      .markdown-content h3,
+      .markdown-content h4 {
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+        font-weight: 700;
+        color: #333;
+      }
+      .markdown-content blockquote {
+        padding: 0.5rem 1rem;
+        color: #6c757d;
+        border-left: 0.25rem solid #dee2e6;
+        margin-bottom: 1rem;
+        font-style: italic;
+      }
+
+      .card-body img {
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .card-body img:hover {
+        transform: scale(1.01);
+      }
+    </style>
+    {% endblock %} {% block content %}
+    <div class="row">
+      <div class="col-lg-10 mx-auto">
+        <h1 class="mb-4">估值分析详情</h1>
+
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0">基本信息</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                <p>
+                  <strong>房产地址：</strong>{{ report.property_data.address }}
+                </p>
+                <p>
+                  <strong>所在城市：</strong>{{ report.property_data.city }}
+                </p>
+              </div>
+              <div class="col-md-6">
+                <p><strong>生成时间：</strong>{{ report.generated_at }}</p>
+                <p><strong>报告ID：</strong>{{ report.report_id }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0">估值结果</h5>
+          </div>
+          <div class="card-body">
+            <div class="row mb-4">
+              <div class="col-12">
+                <div class="text-center">
+                  <h2 class="text-info fw-bold">
+                    {% if report.estimation_result.price_range %} {{
+                    "%.2f"|format(report.estimation_result.price_range[0] *
+                    report.target_property.size) }} - {{
+                    "%.2f"|format(report.estimation_result.price_range[1] *
+                    report.target_property.size) }} {% else %} {{
+                    "%.2f"|format(report.estimation_result.estimated_price *
+                    report.target_property.size) }} {% endif %}
+                  </h2>
+                  <p class="text-muted">总价 (元)</p>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="text-center border-end">
+                  <h3 class="text-primary">
+                    {% if report.estimation_result.price_range %} {{
+                    "%.2f"|format(report.estimation_result.price_range[0]) }} -
+                    {{ "%.2f"|format(report.estimation_result.price_range[1]) }}
+                    {% else %} {{
+                    "%.2f"|format(report.estimation_result.estimated_price) }}
+                    {% endif %}
+                  </h3>
+                  <p class="text-muted">估价单价 (元/㎡)</p>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="text-center">
+                  <h3 class="text-success">
+                    {{ "%.2f"|format(report.estimation_result.confidence * 100)
+                    }}%
+                  </h3>
+                  <p class="text-muted">房产估值分析置信度</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0">目标房产信息</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-3">
+                <p>
+                  <strong>面积：</strong>{{ report.target_property.size }} ㎡
+                </p>
+              </div>
+              <div class="col-md-3">
+                <p><strong>楼层：</strong>{{ report.target_property.floor }}</p>
+              </div>
+              <div class="col-md-3">
+                <p>
+                  <strong>装修：</strong>{{ report.target_property.fitment }}
+                </p>
+              </div>
+              <div class="col-md-3">
+                <p>
+                  <strong>建成年份：</strong>{{
+                  report.target_property.built_time[:4] }}
+                </p>
+              </div>
+              {% if report.target_property.room is defined %}
+              <div class="col-md-6">
+                <p>
+                  <strong>户型：</strong>{{ report.target_property.room }}室{{
+                  report.target_property.hall }}厅{{
+                  report.target_property.kitchen }}厨{{
+                  report.target_property.bathroom }}卫
+                </p>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0">估值详细分析</h5>
+          </div>
+          <div class="card-body">
+            {% set explanation = report.estimation_result.explanation %} {% if
+            "【市场趋势调整】" in explanation %} {% set parts =
+            explanation.split("【市场趋势调整】") %}
+
+            <div class="valuation-module mb-5">
+              <div
+                class="module-header bg-light border-start border-primary border-5 p-3 mb-4"
+              >
+                <h4 class="module-title text-primary">
+                  <i class="bi bi-graph-up pe-2"></i>市场比较法分析
+                </h4>
+              </div>
+              <div
+                class="explanation-text markdown-content px-3"
+                data-content="{{ parts[0].strip() }}"
+              >
+                {{ parts[0].strip() }}
+              </div>
+            </div>
+
+            <div class="valuation-module">
+              <div
+                class="module-header bg-light border-start border-success border-5 p-3 mb-4"
+              >
+                <h4 class="module-title text-success">
+                  <i class="bi bi-arrow-up-right-circle pe-2"></i>市场趋势调整
+                </h4>
+              </div>
+              <div
+                class="explanation-text markdown-content px-3"
+                data-content="{{ parts[1].strip() }}"
+              >
+                {{ parts[1].strip() }}
+              </div>
+            </div>
+            {% else %}
+            <div class="valuation-module">
+              <div
+                class="module-header bg-light border-start border-primary border-5 p-3 mb-4"
+              >
+                <h4 class="module-title text-primary">
+                  <i class="bi bi-graph-up pe-2"></i>市场比较法分析
+                </h4>
+              </div>
+              <div
+                class="explanation-text markdown-content px-3"
+                data-content="{{ explanation.strip() }}"
+              >
+                {{ explanation.strip() }}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="text-center mb-5">
+          <a href="/reports" class="btn btn-secondary me-2">
+            <i class="bi bi-arrow-left"></i> 返回列表
+          </a>
+          {% if report.pdf_url %}
+          <a href="{{ report.pdf_url }}" class="btn btn-primary" download>
+            <i class="bi bi-printer"></i> 打印房产评估报告
+          </a>
+          {% endif %}
+        </div>
+
+        <!-- 房产照片展示 (放在最后) -->
+        <h5 class="mt-5 mb-3 border-bottom pb-2">现场及凭据照片</h5>
+        <div class="row mb-4">
+          {% if report.embedded_images.photo_image or
+          report.property_data.property_photo %}
+          <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm">
+              <div class="card-header bg-light">
+                <h6 class="mb-0 text-primary">
+                  <i class="bi bi-house-door me-1"></i>房屋外观/详情
+                </h6>
+              </div>
+              <div class="card-body text-center p-2">
+                <img
+                  src="{{ report.embedded_images.photo_image if report.embedded_images.photo_image else '/' + report.property_data.property_photo }}"
+                  class="img-fluid rounded"
+                  style="max-height: 400px; width: auto; object-fit: contain"
+                  alt="房屋外观"
+                />
+              </div>
+            </div>
+          </div>
+          {% endif %} {% if report.embedded_images.cert_image or
+          report.property_data.property_cert_image %}
+          <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm">
+              <div class="card-header bg-light">
+                <h6 class="mb-0 text-info">
+                  <i class="bi bi-file-earmark-image me-1"></i>房产证/证明材料
+                </h6>
+              </div>
+              <div class="card-body text-center p-2">
+                <img
+                  src="{{ report.embedded_images.cert_image if report.embedded_images.cert_image else '/' + report.property_data.property_cert_image }}"
+                  class="img-fluid rounded"
+                  style="max-height: 400px; width: auto; object-fit: contain"
+                  alt="房产证"
+                />
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endblock %} {% block modals %}
+    <!-- 图片放大查看模态框 -->
+    <div
+      class="modal fade"
+      id="imageViewerModal"
+      tabindex="-1"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+          <div class="modal-header border-0 pb-0">
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body p-0 text-center">
+            <img id="enlargedImage" src="" class="img-fluid" />
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endblock %} {% block extra_js %}
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // 渲染 Markdown
+        const mdContainers = document.querySelectorAll(".markdown-content");
+        mdContainers.forEach((container) => {
+          const rawContent = container.getAttribute("data-content");
+          if (rawContent && typeof marked !== "undefined") {
+            container.innerHTML = marked.parse(rawContent);
+          }
+        });
+
+        const viewerModalEl = document.getElementById("imageViewerModal");
+        const enlargedImg = document.getElementById("enlargedImage");
+
+        document.querySelectorAll(".card-body img").forEach((img) => {
+          img.addEventListener("click", function () {
+            if (this.src) {
+              enlargedImg.src = this.src;
+              const viewerModal =
+                bootstrap.Modal.getOrCreateInstance(viewerModalEl);
+              viewerModal.show();
+            }
+          });
+        });
+      });
+    </script>
+    {% endblock %}
+  </body>
+</html>

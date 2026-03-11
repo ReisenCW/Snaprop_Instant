@@ -1,0 +1,61 @@
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.eslintcache
+dist/
+dist-ssr/
+coverage/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+.pytest_cache/
+.python-version
+pip-log.txt
+pip-delete-this-directory.txt
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project Specific (Snaprop_Instant)
+Snaprop_Instant/answer/
+Snaprop_Instant/record/
+Snaprop_Instant/report/
+Snaprop_Instant/chroma_db/
+Snaprop_Instant/reflection_history.json
+Snaprop_Instant/cot_trajectory.json
+
+# Logs
+*.log
+logs/
+
+# Local environment
+.env
+.env.local
+.env.*.local

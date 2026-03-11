@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}房估宝 - 房产估值新范式{% endblock %}</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+    {% block extra_css %}{% endblock %}
+  </head>
+  <body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+      <div class="container">
+        <a class="navbar-brand" href="/">
+          <i class="bi bi-house-fill me-2"></i>房估宝
+        </a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav">
+            <li class="nav-item">
+              <a
+                class="nav-link {% if request.path == '/' %}active{% endif %}"
+                href="/"
+                >首页</a
+              >
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link {% if request.path == '/valuation' %}active{% endif %}"
+                href="/valuation"
+                >房产估值</a
+              >
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link {% if request.path == '/reports' %}active{% endif %}"
+                href="/reports"
+                >估值记录</a
+              >
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <main class="container my-4">{% block content %}{% endblock %}</main>
+
+    {% block modals %}{% endblock %}
+
+    <!-- 页脚 -->
+    <footer class="footer">
+      <div class="container">
+        <div class="row justify-content-center">
+          <div class="col-lg-6 col-md-8 mb-4 mb-lg-0">
+            <h5>房估宝 - 房产估值新范式</h5>
+            <p class="mb-0">
+              基于多模态视觉-语义-空间融合编码器、LLM增强推理架构和可微分规则学习框架的智能房产估值系统
+            </p>
+          </div>
+          <div class="col-lg-3 col-md-4 offset-lg-1">
+            <h5>快速链接</h5>
+            <ul class="list-unstyled">
+              <li>
+                <a href="/" class="footer-link text-decoration-none">首页</a>
+              </li>
+              <li>
+                <a href="/valuation" class="footer-link text-decoration-none"
+                  >房产估值</a
+                >
+              </li>
+              <li>
+                <a href="/reports" class="footer-link text-decoration-none"
+                  >估值记录</a
+                >
+              </li>
+            </ul>
+          </div>
+        </div>
+        <hr class="opacity-10 mx-auto" style="max-width: 90%" />
+        <div class="row justify-content-center align-items-center">
+          <div class="col-lg-10">
+            <div class="row">
+              <div class="col-md-6 text-center text-md-start">
+                <p class="copyright mb-0">&copy; 2026 房估宝. 保留所有权利.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>
