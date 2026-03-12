@@ -18,6 +18,65 @@ const md = new MarkdownIt({
 
 const router = useRouter()
 const isLoading = ref(true)
+const loadingProgress = ref(0)
+const loadingStage = ref(0)
+const loadingStages = [
+  '正在通过地理编码精确定位房产位置...',
+  '正在分析房产证 OCR 提取的结构化数据...',
+  '正在多维检索周边成交案例与市场行情...',
+  '正在调用多模态 LLM 进行趋势预测与微调...',
+  '正在综合所有因素生成最终估值报告...'
+]
+
+let progressInterval = null
+
+// 各阶段进度速度，参考实际耗时（每 500ms 一次 tick）：
+//   0→15%  : 前置解析/定位    ~1s   → 快速
+//   15→38% : 联网搜索+精简    ~11s  → 中速
+//   38→55% : 案例检索/Memory  ~3s   → 较快
+//   55→92% : LLM 趋势预测     ~37s  → 极慢（避免卡在95%等待）
+//   92→95% : 最终整合         ~2s
+const getIncrement = (p) => {
+  if (p < 15)  return Math.random() * 5   + 3    // 快：0→15 约1s
+  if (p < 38)  return Math.random() * 0.8 + 0.7  // 中：15→38 约11s
+  if (p < 55)  return Math.random() * 1.5 + 1.5  // 较快：38→55 约4s
+  if (p < 92)  return Math.random() * 0.3 + 0.25 // 极慢：55→92 约46s（覆盖37s LLM）
+  if (p < 95)  return Math.random() * 0.5 + 0.5  // 收尾：92→95 约2s
+  return 0
+}
+
+// 根据进度映射当前阶段
+const getStageByProgress = (p) => {
+  if (p < 15) return 0
+  if (p < 38) return 1
+  if (p < 55) return 2
+  if (p < 92) return 3
+  return 4
+}
+
+const startProgress = () => {
+  loadingProgress.value = 0
+  loadingStage.value = 0
+  progressInterval = setInterval(() => {
+    const p = loadingProgress.value
+    if (p < 95) {
+      loadingProgress.value = Math.min(p + getIncrement(p), 95)
+      const stage = getStageByProgress(loadingProgress.value)
+      if (stage > loadingStage.value) {
+        loadingStage.value = stage
+      }
+    }
+  }, 500)
+}
+
+const clearProgress = () => {
+  if (progressInterval) {
+    clearInterval(progressInterval)
+    progressInterval = null
+  }
+  loadingProgress.value = 100
+}
+
 const reportTitle = ref('智能房产估值分析')
 const reportId = ref('')
 const houseInfo = houseStore
@@ -54,19 +113,22 @@ const renderedExplanation = computed(() => {
 
 const fetchValuation = async () => {
   if (!houseInfo.valuationData) {
-    ElMessage.error('缺少评估数据，请重新开始')
+    isLoading.value = false
+    ElMessage.warning('缺少评估数据，请重新填写信息')
     router.push('/home/step1')
     return
   }
 
   try {
     isLoading.value = true
+    startProgress()
     const payload = {
       ...houseInfo.valuationData,
       username: houseStore.user?.username || 'admin'
     }
     const response = await startValuation(payload)
     if (response && response.data && response.data.success) {
+      clearProgress()
       valuationResult.value = response.data.data
       reportId.value = response.data.data.report_id || 'RE-' + Date.now().toString().slice(-6)
       pdfUrl.value = response.data.data.pdf_url
@@ -80,6 +142,7 @@ const fetchValuation = async () => {
     ElMessage.error(`智能评估分析失败: ${error.message || '请检查后端连接'}`)
   } finally {
     isLoading.value = false
+    clearProgress()
   }
 }
 
@@ -88,6 +151,8 @@ onMounted(() => {
 })
 
 const restartProcess = () => {
+  // 清除上次估值数据，确保重新评估时走完整流程
+  houseInfo.valuationData = null
   router.push('/home/step1')
 }
 
@@ -97,9 +162,8 @@ const goToHistory = () => {
 
 const generateFullReport = () => {
   if (valuationResult.value) {
-    const reportFilename = valuationResult.value.report_id || 'RE-' + Date.now().toString().slice(-6)
-    const id = reportFilename.replace('REPORT_', '')
-    const routeData = router.resolve({ name: 'report-detail', params: { id: id } })
+    const report_id = valuationResult.value.report_id
+    const routeData = router.resolve({ name: 'report-detail', params: { id: report_id } })
     window.open(routeData.href, '_blank')
   } else {
     ElMessage.warning('详情预览尚未生成')
@@ -175,13 +239,42 @@ const formatYear = (val) => {
   />
   <div class="step-three-container">
     <div v-if="isLoading" class="loading-state">
-      <div class="loading-animation">
-        <el-icon class="is-loading main-loading-icon"><refresh /></el-icon>
+      <div class="loading-card">
+        <div class="loading-animation">
+          <el-icon class="is-loading main-loading-icon"><refresh /></el-icon>
+        </div>
+        
+        <h2 class="loading-title">智能评估正在生成中</h2>
+        <p class="loading-desc">系统正在调用多模态大模型为您进行深度价值分析...</p>
+        
+        <div class="progress-wrapper">
+          <el-progress 
+            :percentage="Math.floor(loadingProgress)" 
+            :stroke-width="12" 
+            striped 
+            striped-flow 
+            :duration="10"
+            class="custom-progress"
+          />
+        </div>
+
+        <div class="loading-stages">
+          <div 
+            v-for="(stage, index) in loadingStages" 
+            :key="index"
+            class="stage-item"
+            :class="{ 
+              'active': loadingStage === index, 
+              'completed': loadingStage > index 
+            }"
+          >
+            <el-icon v-if="loadingStage > index" class="stage-icon success"><Check /></el-icon>
+            <el-icon v-else-if="loadingStage === index" class="stage-icon processing is-loading"><Refresh /></el-icon>
+            <el-icon v-else class="stage-icon pending"><Document /></el-icon>
+            <span class="stage-text">{{ stage }}</span>
+          </div>
+        </div>
       </div>
-      <div class="analysis-badge">
-        <span>AI 正在综合地理位置、OCR 识别与外观特征进行精确估值...</span>
-      </div>
-      <el-skeleton :rows="10" animated />
     </div>
 
 <div v-else-if="valuationResult" class="report-content">
@@ -252,6 +345,9 @@ const formatYear = (val) => {
               <el-button type="info" plain :icon="Clock" @click="goToHistory" block size="large" round>
                 查看估值历史记录
               </el-button>
+              <el-button type="warning" plain :icon="Document" @click="generateFullReport" block size="large" round>
+                查看估值详情预览
+              </el-button>
               <el-button 
                 type="success" 
                 :icon="Download" 
@@ -303,25 +399,93 @@ const formatYear = (val) => {
 }
 
 .loading-state {
-  padding: 80px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 60px 0;
+}
+
+.loading-card {
+  background: white;
+  padding: 50px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  width: 100%;
+  max-width: 600px;
   text-align: center;
 }
 
-.main-loading-icon {
-  font-size: 3rem;
-  color: #409eff;
-  margin-bottom: 20px;
+.loading-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #303133;
+  margin: 20px 0 10px;
 }
 
-.analysis-badge {
-  margin-top: 30px;
+.loading-desc {
+  color: #909399;
+  margin-bottom: 30px;
+}
+
+.progress-wrapper {
+  margin-bottom: 40px;
+}
+
+.custom-progress :deep(.el-progress-bar__outer) {
+  background-color: #f0f2f5;
+}
+
+.loading-stages {
+  text-align: left;
+  background: #f8fafc;
+  padding: 25px;
+  border-radius: 12px;
+  border: 1px solid #edf2f7;
+}
+
+.stage-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 15px;
+  gap: 12px;
+  margin-bottom: 15px;
+  opacity: 0.5;
+  transition: all 0.3s ease;
+}
+
+.stage-item:last-child {
+  margin-bottom: 0;
+}
+
+.stage-item.active {
+  opacity: 1;
+  transform: translateX(5px);
   color: #409eff;
-  font-size: 1.15rem;
   font-weight: 500;
+}
+
+.stage-item.completed {
+  opacity: 1;
+  color: #67c23a;
+}
+
+.stage-icon {
+  font-size: 1.2rem;
+}
+
+.stage-icon.success {
+  color: #67c23a;
+}
+
+.stage-icon.processing {
+  color: #409eff;
+}
+
+.stage-icon.pending {
+  color: #c0c4cc;
+}
+
+.stage-text {
+  font-size: 0.95rem;
 }
 
 .report-header {

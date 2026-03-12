@@ -5,8 +5,8 @@ class Config:
     # 使用的模型
     # MODEL = "qwen3-max"
     MODEL = "qwen3-max"
-    WEB_MODEL = "qwen3-plus"
-    FAST_MODEL = "qwen3-flash"
+    WEB_MODEL = "qwen-plus"
+    FAST_MODEL = "qwen-flash"
     # 迭代与搜索配置
     MAX_ITERATIONS = 1  # 预测时的最大搜索迭代次数
     MAX_RETRIES = 4  # 预测错误时的最大重试次数

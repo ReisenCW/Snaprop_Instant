@@ -69,14 +69,21 @@ const handleBeforeUpload = (file) => {
   const reader = new FileReader()
   reader.readAsDataURL(file)
   reader.onload = () => {
-    const fileItem = {
-      name: file.name,
-      url: reader.result, // This is the Base64 data content
-      raw: file,
-      status: 'success',
-      uid: Date.now() + Math.random()
+    // 找到刚才 v-model 自动加进来的那个文件对象
+    const targetFile = fileList.value.find(f => f.raw === file || f.name === file.name)
+    if (targetFile) {
+      targetFile.url = reader.result // 替换为 base64 用于显示和提交
+      targetFile.status = 'success'
+    } else {
+      // 兼容兜底
+      fileList.value.push({
+        name: file.name,
+        url: reader.result,
+        raw: file,
+        status: 'success',
+        uid: Date.now() + Math.random()
+      })
     }
-    fileList.value.push(fileItem)
     ElMessage.success('图片读取成功')
   }
   reader.onerror = (error) => {
@@ -84,12 +91,12 @@ const handleBeforeUpload = (file) => {
     ElMessage.error('图片读取失败')
   }
 
-  // Return false to prevent default upload behavior
+  // 阻止默认上传动作
   return false
 }
 
 const handleRemove = (file) => {
-  const index = fileList.value.indexOf(file)
+  const index = fileList.value.findIndex(f => f.uid === file.uid || f === file)
   if (index !== -1) {
     fileList.value.splice(index, 1)
   }
@@ -112,11 +119,12 @@ const handlePictureCardPreview = (file) => {
     <!-- Upload Card -->
     <el-card shadow="never" class="upload-container-card">
       <el-upload
-        action="/upload"
+        action="#"
         list-type="picture-card"
-        :file-list="fileList"
+        v-model:file-list="fileList"
         multiple
         :auto-upload="false"
+        :on-remove="handleRemove"
         :on-change="(file) => { if(file.status === 'ready') handleBeforeUpload(file.raw) }"
         accept=".png,.jpg,.jpeg"
         class="multi-photo-uploader"
@@ -151,8 +159,8 @@ const handlePictureCardPreview = (file) => {
       </el-upload>
       
       <div v-if="fileList.length > 0" class="uploaded-links-list">
-        <div v-for="(file, index) in fileList" :key="index" class="file-link-item">
-          <el-link :href="file.url" target="_blank" type="primary">图片 {{ index + 1 }}: {{ file.name }}</el-link>
+        <div v-for="(file, index) in fileList" :key="file.uid" class="file-link-item">
+          <el-link :href="file.url" target="_blank" type="primary">已提供图片 {{ index + 1 }}: {{ file.name }}</el-link>
         </div>
       </div>
     </el-card>

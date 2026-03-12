@@ -22,11 +22,38 @@ const isLoading = ref(true)
 const fetchReportData = async () => {
   isLoading.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/reports/${reportId}.json`)
-    reportData.value = response.data
+    let targetId = reportId
+    // 报告文件保存格式为 property_valuation_report_{timestamp}.json
+    // 从 report_id (如 REPORT_20260312102322) 中提取时间戳
+    const extractTimestamp = (id) => {
+      if (id.startsWith('REPORT_')) return id.replace('REPORT_', '')
+      return id
+    }
+    
+    const tryFetch = async (filename) => {
+      const response = await axios.get(`${API_BASE_URL}/api/reports/${filename}`)
+      return response.data
+    }
+
+    try {
+      // 先尝试标准文件名格式
+      const ts = extractTimestamp(targetId)
+      reportData.value = await tryFetch(`property_valuation_report_${ts}.json`)
+    } catch (e1) {
+      try {
+        // 其次直接用 reportId 加 .json
+        reportData.value = await tryFetch(`${targetId}.json`)
+      } catch (e2) {
+        // 最终尝试 REPORT_ 前缀
+        if (!targetId.startsWith('REPORT_')) {
+          targetId = 'REPORT_' + targetId
+        }
+        reportData.value = await tryFetch(`${targetId}.json`)
+      }
+    }
   } catch (error) {
     console.error('Fetch report detail error:', error)
-    ElMessage.error('无法加载报告详情')
+    ElMessage.error('无法加载报告详情，请稍后再试')
   } finally {
     isLoading.value = false
   }

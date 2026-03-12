@@ -682,7 +682,7 @@ def api_valuation():
                 address = data.get('address', '')
                 region = city + address
                 query = f"最近6个月, {region}的房价走势如何?"
-                prediction = predict_region(query)
+                prediction = predict_region(query, enable_evolution=False, debug=True)
                 if prediction:
                     min_t, max_t, _, _ = extract_trend_factor(prediction)
                     trend_factor = (min_t + max_t) / 2.0
@@ -991,16 +991,14 @@ def api_upload_cert():
         structured_data = []
         if raw_text_content:
             try:
-                from llm.llm_manager import QianwenManager
-                llm = QianwenManager()
-                prompt = """你是一个专业的房产数据助手。我会给你一段房产证OCR识别出的乱序文本，请你提取其中的关键信息并以JSON格式返回。
+                from llm_prediction.llm_utils import call_llm
+                sys_prompt = """你是一个专业的房产数据助手。我会给你一段房产证OCR识别出的乱序文本，请你提取其中的关键信息并以JSON格式返回。
                 要求：
                 1. 返回格式必须是一个 JSON 数组，每个元素包含 'field' (字段名) 和 'value' (对应内容)。
                 2. 必须包含的字段：房产地址、城市、建筑面积、户型、建成年份、权利人、共有情况、登记日期。
                 3. 如果某项不存在，value 设为空字符串。
                 4. 只返回 JSON 代码块，不要有其他解释。"""
-                
-                llm_reply = llm.interact_qwen(prompt, raw_text_content)
+                llm_reply = call_llm(model="qwen-flash", system_prompt=sys_prompt, prompt="OCR识别出的乱序文本：" + raw_text_content)
                 
                 # 提取 JSON 部分
                 json_match = re.search(r'\[.*\]', llm_reply, re.DOTALL)
