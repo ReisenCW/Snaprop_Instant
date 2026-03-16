@@ -72,17 +72,17 @@ class RealEstateValuation:
                     continue
                 elif key == 'transaction_type':
                     diff = -(case[key] - self.target_case[key])
-                elif key == 'transaction_time':
-                    date_case = datetime.datetime.strptime(case[key], self.time_str_model)
-                    date_target = datetime.datetime.strptime(self.target_case[key], self.time_str_model)
-                    date_diff = abs((date_case - date_target).days) // 365
-                    if date_diff < 1:
-                        diff = 0
-                    elif date_diff <= 2:
-                        diff = 1
-                    else:
-                        diff = 2
-                    if date_case > date_target: diff = -diff  #这里有疑问，房价总趋势不是涨吗，越近交易越贵吧？
+                # elif key == 'transaction_time':
+                #     date_case = datetime.datetime.strptime(case[key], self.time_str_model)
+                #     date_target = datetime.datetime.strptime(self.target_case[key], self.time_str_model)
+                #     date_diff = abs((date_case - date_target).days) // 365
+                #     if date_diff < 1:
+                #         diff = 0
+                #     elif date_diff <= 2:
+                #         diff = 1
+                #     else:
+                #         diff = 2
+                #     if date_case > date_target: diff = -diff  #这里有疑问，房价总趋势不是涨吗，越近交易越贵吧？
                 elif key == 'green_rate':
                     green_diff = abs(case[key] - self.target_case[key])
                     if green_diff < 0.3:

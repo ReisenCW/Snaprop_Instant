@@ -20,7 +20,7 @@ const router = useRouter()
 const isLoading = ref(true)
 const loadingProgress = ref(0)
 const loadingStage = ref(0)
-const loadingStages = [
+const baseLoadingStages = [
   '正在通过地理编码精确定位房产位置...',
   '正在分析房产证 OCR 提取的结构化数据...',
   '正在多维检索周边成交案例与市场行情...',
@@ -28,7 +28,28 @@ const loadingStages = [
   '正在综合所有因素生成最终估值报告...'
 ]
 
+// 根据是否开启 LLM 预测动态返回加载阶段
+const loadingStages = computed(() => {
+  const hasLLM = houseInfo.enablePrediction !== false
+  return hasLLM ? baseLoadingStages : baseLoadingStages.filter((_, i) => i !== 3)
+})
+
 let progressInterval = null
+
+// 根据是否开启 LLM 预测调整进度映射
+const getStageByProgress = (p, hasLLM = true) => {
+  if (p < 15) return 0
+  if (p < 38) return 1
+  if (p < 55) return 2
+  if (hasLLM) {
+    if (p < 92) return 3
+    return 4
+  } else {
+    // 无 LLM 时，跳过阶段 3，直接到阶段 4
+    if (p < 75) return 3 // 对应原来的阶段 4
+    return 4
+  }
+}
 
 // 各阶段进度速度，参考实际耗时（每 500ms 一次 tick）：
 //   0→15%  : 前置解析/定位    ~1s   → 快速
@@ -45,23 +66,17 @@ const getIncrement = (p) => {
   return 0
 }
 
-// 根据进度映射当前阶段
-const getStageByProgress = (p) => {
-  if (p < 15) return 0
-  if (p < 38) return 1
-  if (p < 55) return 2
-  if (p < 92) return 3
-  return 4
-}
+
 
 const startProgress = () => {
   loadingProgress.value = 0
   loadingStage.value = 0
+  const hasLLM = houseInfo.enablePrediction !== false
   progressInterval = setInterval(() => {
     const p = loadingProgress.value
     if (p < 95) {
       loadingProgress.value = Math.min(p + getIncrement(p), 95)
-      const stage = getStageByProgress(loadingProgress.value)
+      const stage = getStageByProgress(loadingProgress.value, hasLLM)
       if (stage > loadingStage.value) {
         loadingStage.value = stage
       }
@@ -153,6 +168,8 @@ onMounted(() => {
 const restartProcess = () => {
   // 清除上次估值数据，确保重新评估时走完整流程
   houseInfo.valuationData = null
+  // 清空表单数据，让用户重新填写
+  houseStore.reset()
   router.push('/home/step1')
 }
 

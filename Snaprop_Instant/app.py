@@ -8,6 +8,7 @@ import json
 import re
 import glob
 from datetime import datetime, timedelta
+import numpy as np
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -47,6 +48,95 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # 创建房产估值系统
 valuation_system = PropertyValuationSystem()
+
+def calculate_reference_time(comparable_cases, weights=None):
+    """
+    计算可比案例的加权平均交易时间作为估价基准时点
+    
+    Args:
+        comparable_cases: 可比案例列表，每个案例包含 transaction_time
+        weights: 权重列表（通常基于相似度），如果为None则使用等权重
+        
+    Returns:
+        tuple: (reference_time, time_std_days, months_to_now)
+            - reference_time: 加权平均时间
+            - time_std_days: 时间标准差（天）
+            - months_to_now: 距当前时间的月数
+    """
+    if not comparable_cases:
+        return None, 0, 6
+    
+    times = []
+    for case in comparable_cases:
+        try:
+            t_str = case.get('transaction_time', '')
+            if t_str:
+                t = datetime.strptime(str(t_str).split()[0], '%Y-%m-%d')
+                times.append(t)
+        except:
+            continue
+    
+    if not times:
+        return None, 0, 6
+    
+    timestamps = np.array([t.timestamp() for t in times])
+    
+    if weights is None or len(weights) != len(times):
+        weights = np.ones(len(times))
+    else:
+        weights = np.array(weights)
+    
+    weights = weights / weights.sum()
+    
+    weighted_timestamp = np.sum(timestamps * weights)
+    reference_time = datetime.fromtimestamp(weighted_timestamp)
+    
+    time_std_seconds = np.sqrt(np.sum(weights * (timestamps - weighted_timestamp) ** 2))
+    time_std_days = time_std_seconds / (24 * 3600)
+    
+    days_to_now = (datetime.now() - reference_time).days
+    months_to_now = max(1, days_to_now // 30)
+    
+    return reference_time, time_std_days, months_to_now
+
+
+def generate_prediction_query(region, reference_time, months_to_now, time_std_days):
+    """
+    根据动态计算的时间参数生成预测查询语句
+    
+    Args:
+        region: 预测区域
+        reference_time: 估价基准时点
+        months_to_now: 距当前时间的月数
+        time_std_days: 时间标准差（用于判断时间离散程度）
+        
+    Returns:
+        str: 生成的预测查询语句
+    """
+    if reference_time is None:
+        return f"最近6个月, {region}的房价走势如何?"
+    
+    time_str = reference_time.strftime('%Y年%m月')
+    
+    if time_std_days > 90:
+        time_desc = f"约{months_to_now}个月"
+    else:
+        time_desc = f"{months_to_now}个月"
+    
+    if months_to_now <= 3:
+        query = f"{time_str}至今, {region}的房价走势如何?"
+    elif months_to_now <= 12:
+        query = f"最近{time_desc}, {region}的房价走势如何?"
+    else:
+        years = months_to_now // 12
+        remain_months = months_to_now % 12
+        if remain_months > 0:
+            query = f"最近{years}年{remain_months}个月, {region}的房价走势如何?"
+        else:
+            query = f"最近{years}年, {region}的房价走势如何?"
+    
+    return query
+
 
 def extract_trend_factor(prediction_text):
     """
@@ -678,10 +768,19 @@ def api_valuation():
         # 3. AI 预测调整
         if data.get('enable_prediction', True):
             try:
-                # 尝试预测趋势
                 address = data.get('address', '')
                 region = city + address
-                query = f"最近6个月, {region}的房价走势如何?"
+                
+                case_weights = None
+                if estimation_result.get('details') and estimation_result['details'].get('weights'):
+                    case_weights = estimation_result['details']['weights']
+                
+                reference_time, time_std_days, months_to_now = calculate_reference_time(
+                    comparable_cases, case_weights
+                )
+                
+                query = generate_prediction_query(region, reference_time, months_to_now, time_std_days)
+                
                 prediction = predict_region(query, enable_evolution=False, debug=True)
                 if prediction:
                     min_t, max_t, _, _ = extract_trend_factor(prediction)
@@ -689,7 +788,20 @@ def api_valuation():
                     orig_p = estimation_result['estimated_price']
                     new_p = orig_p * (1 + trend_factor)
                     estimation_result['estimated_price'] = new_p
-                    estimation_result['explanation'] += f"\n\n【AI趋势预测】\n{prediction}\n\n微调后单价：{int(new_p)}元/平"
+                    
+                    time_info = ""
+                    if reference_time:
+                        time_info = f"\n估价基准时点: {reference_time.strftime('%Y年%m月%d日')}"
+                        if time_std_days > 60:
+                            time_info += f" (案例时间跨度较大，标准差: {int(time_std_days)}天)"
+                    
+                    estimation_result['explanation'] += (
+                        f"\n\n【AI趋势预测】\n"
+                        f"预测时段: {query.split(',')[0]}\n"
+                        f"{time_info}\n\n"
+                        f"{prediction}\n\n"
+                        f"微调后单价：{int(new_p)}元/平"
+                    )
             except Exception as pe:
                 print(f"Prediction error: {pe}")
 
