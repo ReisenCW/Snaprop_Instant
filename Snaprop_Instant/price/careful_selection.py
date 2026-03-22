@@ -5,6 +5,12 @@ import re
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from typing import Dict, List, Any, Optional
+import sys
+import os
+
+# 导入百度地图相关模块
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from record.save_map import get_origin_place
 
 
 class careful_selection:
@@ -17,7 +23,7 @@ class careful_selection:
 
     def __init__(self, username, password, host, port, database, table, 
                  house_floor, house_area, house_type, house_decoration, 
-                 house_year, house_loc, selection_weights=None):
+                 house_year, house_loc, selection_weights=None, city="上海"):
         self.table = table
         self.target_floor = self._get_floor_level(house_floor)
         self.target_area = float(house_area)
@@ -25,6 +31,7 @@ class careful_selection:
         self.target_decoration = self._get_deco_level(house_decoration)
         self.target_year = int(house_year)
         self.house_loc = house_loc
+        self.city = city
         self.today = datetime.now()
         
         # Original values kept for SQL queries if needed
@@ -46,6 +53,31 @@ class careful_selection:
 
         uri = f"mysql+mysqlconnector://{username}:{password}@{host}:{port}/{database}"
         self.engine = create_engine(uri)
+        
+        # 获取目标房产的经纬度
+        self.target_lng = None
+        self.target_lat = None
+        self._init_target_location()
+
+    def _init_target_location(self):
+        """获取目标房产的经纬度"""
+        try:
+            # 清理地址
+            clean_addr = re.sub(r'\d+[室层楼号弄]', '', str(self.house_loc))
+            if not clean_addr:
+                clean_addr = self.house_loc
+            
+            # 调用百度地图API
+            result = get_origin_place(clean_addr, self.city, status=0)
+            if result:
+                self.target_lng, self.target_lat = result.split(',')
+                self.target_lng = float(self.target_lng)
+                self.target_lat = float(self.target_lat)
+                print(f"目标房产位置: ({self.target_lng}, {self.target_lat})")
+            else:
+                print(f"警告: 无法获取目标房产 {clean_addr} 的位置")
+        except Exception as e:
+            print(f"获取目标位置失败: {e}")
     
     def _get_floor_level(self, floor_str: str) -> int:
         """Map floor description to numeric level."""
@@ -155,21 +187,83 @@ class careful_selection:
             return []
 
     def _retrieve_data(self, base_loc: str) -> pd.DataFrame:
-        """Implements the multi-level search strategy."""
-        strategies = [
-            # T1: Same community, tight constraints
-            {"sql": f"SELECT * FROM {self.table} WHERE house_loc LIKE '%%{base_loc}%%' AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.15} AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 5"},
-            # T2: Same community, relaxed constraints
-            {"sql": f"SELECT * FROM {self.table} WHERE house_loc LIKE '%%{base_loc}%%' AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.3} AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 10"},
-            # T3: Neighborhood/Wider area (if base_loc is specific)
-            {"sql": f"SELECT * FROM {self.table} WHERE ABS(house_area - {self.target_area}) <= 50 AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 15"}
-        ]
+        """Implements the multi-level search strategy with location-based filtering."""
+        
+        # 如果有目标经纬度，使用基于距离的检索
+        if self.target_lng and self.target_lat:
+            # Haversine公式计算距离的SQL (单位：公里)
+            distance_sql = f"""
+                (6371 * acos(cos(radians({self.target_lat})) * cos(radians(lat)) 
+                * cos(radians(lng) - radians({self.target_lng})) 
+                + sin(radians({self.target_lat})) * sin(radians(lat)))) AS distance
+            """
+            
+            strategies = [
+                # T1: 同一小区 + 严格条件 (1公里内)
+                {"sql": f"""SELECT *, {distance_sql} FROM {self.table} 
+                    WHERE house_loc LIKE '%{base_loc}%' 
+                    AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.15} 
+                    AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 5
+                    HAVING distance <= 1""", "max_dist": 1},
+                
+                # T2: 2公里内 + 中等条件
+                {"sql": f"""SELECT *, {distance_sql} FROM {self.table} 
+                    WHERE lng IS NOT NULL AND lat IS NOT NULL 
+                    AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.25}
+                    AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 8
+                    HAVING distance <= 2""", "max_dist": 2},
+                
+                # T3: 5公里内 + 放宽条件
+                {"sql": f"""SELECT *, {distance_sql} FROM {self.table} 
+                    WHERE lng IS NOT NULL AND lat IS NOT NULL
+                    AND ABS(house_area - {self.target_area}) <= 50
+                    AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 15
+                    HAVING distance <= 5""", "max_dist": 5},
+                
+                # T4: 10公里内 + 进一步放宽
+                {"sql": f"""SELECT *, {distance_sql} FROM {self.table} 
+                    WHERE lng IS NOT NULL AND lat IS NOT NULL
+                    AND ABS(house_area - {self.target_area}) <= 80
+                    AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 20
+                    HAVING distance <= 10""", "max_dist": 10},
+            ]
+        else:
+            # 没有经纬度时使用原有逻辑
+            print("警告: 无目标经纬度，使用传统检索方式")
+            strategies = [
+                {"sql": f"SELECT * FROM {self.table} WHERE house_loc LIKE '%{base_loc}%' AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.15} AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 5"},
+                {"sql": f"SELECT * FROM {self.table} WHERE house_loc LIKE '%{base_loc}%' AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.3} AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 10"},
+                {"sql": f"SELECT * FROM {self.table} WHERE ABS(house_area - {self.target_area}) <= 50 AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 15"}
+            ]
         
         for strategy in strategies:
             try:
                 df = pd.read_sql(strategy['sql'], self.engine)
                 if len(df) >= 3:
+                    if 'distance' in df.columns:
+                        df = df.sort_values('distance')
+                        max_dist = strategy.get('max_dist', '未知')
+                        print(f"检索到 {len(df)} 条案例，范围: {max_dist}公里内")
                     return df
-            except Exception:
+            except Exception as e:
+                print(f"SQL执行失败: {e}")
                 continue
+        
+        # 兜底策略：返回有经纬度的最近案例
+        if self.target_lng and self.target_lat:
+            try:
+                distance_sql = f"""
+                    (6371 * acos(cos(radians({self.target_lat})) * cos(radians(lat)) 
+                    * cos(radians(lng) - radians({self.target_lng})) 
+                    + sin(radians({self.target_lat})) * sin(radians(lat)))) AS distance
+                """
+                df = pd.read_sql(f"""SELECT *, {distance_sql} FROM {self.table} 
+                    WHERE lng IS NOT NULL AND lat IS NOT NULL
+                    ORDER BY distance LIMIT 20""", self.engine)
+                if len(df) >= 3:
+                    print(f"使用兜底策略检索到 {len(df)} 条案例")
+                    return df
+            except Exception as e:
+                print(f"兜底查询也失败: {e}")
+        
         return pd.DataFrame()

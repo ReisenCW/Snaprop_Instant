@@ -732,7 +732,8 @@ def api_valuation():
             database=mysql_manager._db, table=mysql_manager.get_table(city),
             house_floor=target_property['floor'], house_area=target_property['size'],
             house_type=house_type_full, house_decoration=target_property['fitment'],
-            house_year=int(target_property['built_time']), house_loc=property_data['address']
+            house_year=int(target_property['built_time']), house_loc=property_data['address'],
+            city=city
         )
         df = selection_example.selection()
         comparable_cases = []

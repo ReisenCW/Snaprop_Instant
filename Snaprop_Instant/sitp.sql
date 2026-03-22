@@ -66,7 +66,10 @@ CREATE TABLE `shanghai` (
   `u_price` float DEFAULT NULL,
   `t_price` int DEFAULT NULL,
   `detail_url` text,
-  PRIMARY KEY (`id`)
+  `lng` decimal(10,7) DEFAULT NULL,
+  `lat` decimal(10,7) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  INDEX idx_location (`lng`, `lat`)
 ) ENGINE=InnoDB AUTO_INCREMENT=125 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

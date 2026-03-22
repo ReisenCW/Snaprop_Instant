@@ -134,7 +134,10 @@ class MySQLManager():
               `u_price` float DEFAULT NULL,
               `t_price` int DEFAULT NULL,
               `detail_url` text,
-              PRIMARY KEY (`id`)
+              `lng` decimal(10,7) DEFAULT NULL,
+              `lat` decimal(10,7) DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              INDEX idx_location (`lng`, `lat`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
             """
             self._cursor.execute(query)
@@ -199,7 +202,7 @@ class MySQLManager():
             query_city = "INSERT INTO city (city_name, city_introduction, detail) VALUES (%s, %s, %s)"
             self._cursor.execute(query_city, (city_name, intro, detail))
             
-            # 2. 创建房产数据表 (基于上海表结构)
+            # 2. 创建房产数据表 (基于上海表结构，包含经纬度)
             query_create = f"""
             CREATE TABLE IF NOT EXISTS `{table_name}` (
               `id` int NOT NULL AUTO_INCREMENT,
@@ -219,7 +222,10 @@ class MySQLManager():
               `u_price` float DEFAULT NULL,
               `t_price` int DEFAULT NULL,
               `detail_url` text,
-              PRIMARY KEY (`id`)
+              `lng` decimal(10,7) DEFAULT NULL,
+              `lat` decimal(10,7) DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              INDEX idx_location (`lng`, `lat`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
             """
             self._cursor.execute(query_create)
@@ -253,22 +259,23 @@ class MySQLManager():
             df.replace('未知', None, inplace=True)
             df.replace('', None, inplace=True)
 
-            # 插入查询
+            # 插入查询（包含经纬度字段）
             insert_query = f"""
             INSERT INTO {table_name} 
             (house_type, house_floor, house_direction, house_area, house_structure, 
              transaction_type, transaction_time, house_decoration, is_elevator, 
-             house_year, green_rate, house_loc, house_position, u_price, t_price, detail_url)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             house_year, green_rate, house_loc, house_position, u_price, t_price, detail_url, lng, lat)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
 
-            # 准备数据元组列表
+            # 准备数据元组列表（包含经纬度，如果数据中有则使用，否则为None后续可批量更新）
             data_to_insert = [
                 (
                     row['house_type'], row['house_floor'], row['house_direction'], row['house_area'],
                     row['house_structure'], row['transaction_type'], row['transaction_time'], row['house_decoration'],
                     row['is_elevator'], row['house_year'], row['green_rate'], row['house_loc'], row['house_position'],
-                    row['u_price'], row['t_price'], row['detail_url']
+                    row['u_price'], row['t_price'], row['detail_url'],
+                    row.get('lng', None), row.get('lat', None)
                 ) for _, row in df.iterrows()
             ]
 
@@ -597,12 +604,28 @@ class MySQLManager():
         table_name = self.get_table(city)
         if not table_name: return False
         try:
+            # 支持传入lng和lat，如果没传则尝试通过百度地图API获取
+            lng = data.get('lng')
+            lat = data.get('lat')
+            
+            # 如果没有传入经纬度，尝试从地址获取
+            if not lng or not lat:
+                try:
+                    from record.save_map import get_origin_place
+                    address = data.get('house_position') or data.get('house_loc')
+                    if address:
+                        result = get_origin_place(str(address), city, status=0)
+                        if result:
+                            lng, lat = result.split(',')
+                except Exception as e:
+                    print(f"获取位置失败: {e}")
+            
             query = f"""
             INSERT INTO {table_name} 
             (house_type, house_floor, house_direction, house_area, house_structure, 
              transaction_type, transaction_time, house_decoration, is_elevator, 
-             house_year, green_rate, house_loc, house_position, u_price, t_price, detail_url)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             house_year, green_rate, house_loc, house_position, u_price, t_price, detail_url, lng, lat)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             values = (
                 data.get('house_type'), data.get('house_floor'), data.get('house_direction'),
@@ -611,7 +634,8 @@ class MySQLManager():
                 data.get('house_decoration'), data.get('is_elevator', 1),
                 data.get('house_year'), data.get('green_rate', 30),
                 data.get('house_loc'), data.get('house_position'),
-                data.get('u_price'), data.get('t_price'), data.get('detail_url', '')
+                data.get('u_price'), data.get('t_price'), data.get('detail_url', ''),
+                lng, lat
             )
             self._cursor.execute(query, values)
             self._connection.commit()
@@ -624,4 +648,59 @@ class MySQLManager():
     @property
     def host(self):
         return self._host
+
+    def get_records_without_location(self, city, limit=100):
+        """获取没有经纬度的房产记录"""
+        table_name = self.get_table(city)
+        if not table_name:
+            return []
+        
+        try:
+            query = f"""
+                SELECT id, house_loc, house_position 
+                FROM {table_name} 
+                WHERE (lng IS NULL OR lat IS NULL OR lng = 0 OR lat = 0)
+                LIMIT %s
+            """
+            self._cursor.execute(query, (limit,))
+            results = self._cursor.fetchall()
+            return [{"id": r[0], "house_loc": r[1], "house_position": r[2]} for r in results]
+        except mysql.connector.Error as err:
+            print(f"获取无位置记录失败: {err}")
+            return []
+
+    def update_location(self, city, record_id, lng, lat):
+        """更新单条记录的位置信息"""
+        table_name = self.get_table(city)
+        if not table_name:
+            return False
+        
+        try:
+            query = f"UPDATE {table_name} SET lng = %s, lat = %s WHERE id = %s"
+            self._cursor.execute(query, (lng, lat, record_id))
+            self._connection.commit()
+            return True
+        except mysql.connector.Error as err:
+            print(f"更新位置失败: {err}")
+            return False
+
+    def add_location_to_insert(self, city, data, lng, lat):
+        """在插入数据时自动添加位置信息（供insert方法调用）"""
+        table_name = self.get_table(city)
+        if not table_name:
+            return
+        
+        # 在原有插入数据的基础上添加lng和lat
+        base_cols = ["house_type", "house_floor", "house_direction", "house_area", 
+                     "house_structure", "transaction_type", "transaction_time", 
+                     "house_decoration", "is_elevator", "house_year", "green_rate", 
+                     "house_loc", "house_position", "u_price", "t_price", "detail_url"]
+        
+        # 如果lng和lat有效，添加到插入语句中
+        if lng and lat:
+            base_cols.extend(["lng", "lat"])
+            data = list(data)
+            data.extend([lng, lat])
+        
+        return base_cols, tuple(data)
 
