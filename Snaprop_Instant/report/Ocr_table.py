@@ -53,7 +53,10 @@ class OCR_Table:
             type='Table',
             table_config=ocr_api_20210707_models.RecognizeAllTextRequestTableConfig(output_table_excel=True)
         )
-        runtime = util_models.RuntimeOptions()
+        runtime = util_models.RuntimeOptions(
+            connect_timeout=30,
+            read_timeout=60
+        )
         try:
             resp = client.recognize_all_text_with_options(recognize_all_text_request, runtime)
             # ConsoleClient.log(UtilClient.to_jsonstring(resp))
