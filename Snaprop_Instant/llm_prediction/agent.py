@@ -40,6 +40,10 @@ class HousePriceAgent:
         }
         answers = []
         filename = self.answer_path + f"{self.region.strip()}.json"
+        
+        # 确保目录存在
+        os.makedirs(self.answer_path, exist_ok=True)
+        
         if os.path.exists(filename):
             try:
                 with open(filename, "r", encoding="utf-8") as f:
