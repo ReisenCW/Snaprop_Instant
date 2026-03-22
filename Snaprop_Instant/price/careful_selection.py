@@ -23,7 +23,8 @@ class careful_selection:
 
     def __init__(self, username, password, host, port, database, table, 
                  house_floor, house_area, house_type, house_decoration, 
-                 house_year, house_loc, selection_weights=None, city="上海"):
+                 house_year, house_loc, house_direction=None, house_structure=None,
+                 selection_weights=None, city="上海"):
         self.table = table
         self.target_floor = self._get_floor_level(house_floor)
         self.target_area = float(house_area)
@@ -34,21 +35,29 @@ class careful_selection:
         self.city = city
         self.today = datetime.now()
         
+        # 新增：朝向和结构
+        self.target_direction = self._parse_direction(house_direction)
+        self.target_structure = self._parse_structure(house_structure)
+        
         # Original values kept for SQL queries if needed
         self.raw_house_floor = house_floor
         self.raw_house_type = house_type
         self.raw_house_decoration = house_decoration
         self.raw_house_year = house_year
         self.raw_house_area = house_area
+        self.raw_house_direction = house_direction
+        self.raw_house_structure = house_structure
 
         # Weights for distinction calculation
         self.weights = selection_weights or {
-            'floor': 0.15,
-            'area': 0.25,
-            'type': 0.20,
-            'decoration': 0.15,
-            'year': 0.15,
-            'time': 0.10
+            'floor': 0.10,
+            'area': 0.20,
+            'type': 0.15,
+            'decoration': 0.10,
+            'year': 0.10,
+            'time': 0.05,
+            'direction': 0.15,  # 新增朝向权重
+            'structure': 0.15   # 新增结构权重
         }
 
         uri = f"mysql+mysqlconnector://{username}:{password}@{host}:{port}/{database}"
@@ -115,6 +124,51 @@ class careful_selection:
             return float(f[0]) / 100
         return 0.0
 
+    @staticmethod
+    def _parse_direction(direction_str) -> int:
+        """解析朝向，返回价值评分（越高越好）
+        南北通透 > 南 > 东南/西南 > 东/西 > 北
+        """
+        if not direction_str:
+            return 3  # 默认中等
+        
+        direction_str = str(direction_str).upper()
+        
+        # 南北通透最好
+        if '南' in direction_str and '北' in direction_str:
+            return 5
+        # 纯南
+        if '南' in direction_str:
+            return 4
+        # 东南/西南
+        if '东南' in direction_str or '西南' in direction_str:
+            return 3
+        # 纯东/纯西
+        if '东' in direction_str or '西' in direction_str:
+            return 2
+        # 北向最差
+        if '北' in direction_str:
+            return 1
+        return 3
+
+    @staticmethod
+    def _parse_structure(structure_str) -> int:
+        """解析建筑结构，返回价值评分（越高越好）
+        别墅 > 复式 > 平层
+        """
+        if not structure_str:
+            return 2  # 默认平层
+        
+        structure_str = str(structure_str)
+        
+        if '别墅' in structure_str:
+            return 3
+        if '复式' in structure_str or '跃层' in structure_str:
+            return 2
+        if '平层' in structure_str:
+            return 1
+        return 1
+
     def selection(self) -> List[Dict[str, Any]]:
         """Main selection logic with tiered strategy and vectorized distance calculation."""
         try:
@@ -159,9 +213,19 @@ class careful_selection:
             df['d_time'] = pd.to_datetime(df['transaction_time'], errors='coerce').apply(
                 lambda x: abs((self.today - x).days) if pd.notnull(x) else 365
             )
+            
+            # 新增：朝向距离（差异越大扣分越多）
+            df['d_direction'] = df['house_direction'].apply(
+                lambda x: abs(self._parse_direction(x) - self.target_direction)
+            )
+            
+            # 新增：结构距离
+            df['d_structure'] = df['house_structure'].apply(
+                lambda x: abs(self._parse_structure(x) - self.target_structure)
+            )
 
             # 4. Scaling and Weighting
-            cols = ['d_floor', 'd_area', 'd_type', 'd_deco', 'd_year', 'd_time']
+            cols = ['d_floor', 'd_area', 'd_type', 'd_deco', 'd_year', 'd_time', 'd_direction', 'd_structure']
             scaler = MinMaxScaler()
             df[cols] = scaler.fit_transform(df[cols])
             
@@ -171,7 +235,9 @@ class careful_selection:
                 self.weights['type'] * df['d_type'] +
                 self.weights['decoration'] * df['d_deco'] +
                 self.weights['year'] * df['d_year'] +
-                self.weights['time'] * df['d_time']
+                self.weights['time'] * df['d_time'] +
+                self.weights['direction'] * df['d_direction'] +
+                self.weights['structure'] * df['d_structure']
             )
 
             # Cleanup and sort
@@ -189,6 +255,9 @@ class careful_selection:
     def _retrieve_data(self, base_loc: str) -> pd.DataFrame:
         """Implements the multi-level search strategy with location-based filtering."""
         
+        # 成交时间筛选：只取2025年1月1日之后的数据
+        min_transaction_date = "2025-01-01"
+        
         # 如果有目标经纬度，使用基于距离的检索
         if self.target_lng and self.target_lat:
             # Haversine公式计算距离的SQL (单位：公里)
@@ -204,6 +273,7 @@ class careful_selection:
                     WHERE house_loc LIKE '%{base_loc}%' 
                     AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.15} 
                     AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 5
+                    AND transaction_time >= '{min_transaction_date}'
                     HAVING distance <= 1""", "max_dist": 1},
                 
                 # T2: 2公里内 + 中等条件
@@ -211,6 +281,7 @@ class careful_selection:
                     WHERE lng IS NOT NULL AND lat IS NOT NULL 
                     AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.25}
                     AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 8
+                    AND transaction_time >= '{min_transaction_date}'
                     HAVING distance <= 2""", "max_dist": 2},
                 
                 # T3: 5公里内 + 放宽条件
@@ -218,6 +289,7 @@ class careful_selection:
                     WHERE lng IS NOT NULL AND lat IS NOT NULL
                     AND ABS(house_area - {self.target_area}) <= 50
                     AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 15
+                    AND transaction_time >= '{min_transaction_date}'
                     HAVING distance <= 5""", "max_dist": 5},
                 
                 # T4: 10公里内 + 进一步放宽
@@ -225,15 +297,16 @@ class careful_selection:
                     WHERE lng IS NOT NULL AND lat IS NOT NULL
                     AND ABS(house_area - {self.target_area}) <= 80
                     AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 20
+                    AND transaction_time >= '{min_transaction_date}'
                     HAVING distance <= 10""", "max_dist": 10},
             ]
         else:
             # 没有经纬度时使用原有逻辑
             print("警告: 无目标经纬度，使用传统检索方式")
             strategies = [
-                {"sql": f"SELECT * FROM {self.table} WHERE house_loc LIKE '%{base_loc}%' AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.15} AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 5"},
-                {"sql": f"SELECT * FROM {self.table} WHERE house_loc LIKE '%{base_loc}%' AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.3} AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 10"},
-                {"sql": f"SELECT * FROM {self.table} WHERE ABS(house_area - {self.target_area}) <= 50 AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 15"}
+                {"sql": f"SELECT * FROM {self.table} WHERE house_loc LIKE '%{base_loc}%' AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.15} AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 5 AND transaction_time >= '{min_transaction_date}'"},
+                {"sql": f"SELECT * FROM {self.table} WHERE house_loc LIKE '%{base_loc}%' AND ABS(house_area - {self.target_area}) <= {self.target_area * 0.3} AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 10 AND transaction_time >= '{min_transaction_date}'"},
+                {"sql": f"SELECT * FROM {self.table} WHERE ABS(house_area - {self.target_area}) <= 50 AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 15 AND transaction_time >= '{min_transaction_date}'"}
             ]
         
         for strategy in strategies:
@@ -259,6 +332,7 @@ class careful_selection:
                 """
                 df = pd.read_sql(f"""SELECT *, {distance_sql} FROM {self.table} 
                     WHERE lng IS NOT NULL AND lat IS NOT NULL
+                    AND transaction_time >= '{min_transaction_date}'
                     ORDER BY distance LIMIT 20""", self.engine)
                 if len(df) >= 3:
                     print(f"使用兜底策略检索到 {len(df)} 条案例")

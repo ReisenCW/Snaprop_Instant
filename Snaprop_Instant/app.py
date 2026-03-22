@@ -710,6 +710,7 @@ def api_valuation():
             "floor": data.get('floor', '中楼层'),
             "fitment": data.get('fitment', '精装'),
             "structure": data.get('structure', '平层'),
+            "direction": data.get('direction', '南'),  # 新增朝向
             "built_time": str(data.get('year', 2015)),
             "room": int(data.get('room', 2)),
             "hall": int(data.get('hall', 1)),
@@ -733,6 +734,8 @@ def api_valuation():
             house_floor=target_property['floor'], house_area=target_property['size'],
             house_type=house_type_full, house_decoration=target_property['fitment'],
             house_year=int(target_property['built_time']), house_loc=property_data['address'],
+            house_direction=target_property.get('direction'), 
+            house_structure=target_property.get('structure'),
             city=city
         )
         df = selection_example.selection()
@@ -783,7 +786,7 @@ def api_valuation():
                     if reference_time:
                         time_info = f"\n估价基准时点: {reference_time.strftime('%Y年%m月%d日')}"
                         if time_std_days > 60:
-                            time_info += f" (案例时间跨度较大，标准差: {int(time_std_days)}天)"
+                            time_info += f" (案例时间跨度: {int(time_std_days)}天)"
                     
                     estimation_result['explanation'] += (
                         f"\n\n【AI趋势预测】\n"
