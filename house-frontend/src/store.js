@@ -16,6 +16,7 @@ export const houseStore = reactive({
   direction: '南',
   year: '',
   enablePrediction: false, // 是否开启大语言模型预测微调
+  selectionWeights: null, // 专家权重
   valuationData: null,
   cert_image: '',
 
@@ -53,6 +54,7 @@ export const houseStore = reactive({
     this.direction = '南'
     this.year = ''
     this.enablePrediction = false
+    this.selectionWeights = null
     this.valuationData = null
     this.cert_image = ''
   }

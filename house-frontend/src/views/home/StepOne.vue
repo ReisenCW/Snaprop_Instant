@@ -23,6 +23,24 @@ const ocrTableData = ref([])
 
 const houseInfo = houseStore
 
+// 专家权重
+const weights = reactive({
+  area: 0.20,
+  type: 0.15,
+  direction: 0.15,
+  structure: 0.15,
+  floor: 0.10,
+  decoration: 0.10,
+  year: 0.10,
+  time: 0.05
+})
+
+const defaultWeights = { ...weights }
+
+const resetWeights = () => {
+  Object.assign(weights, defaultWeights)
+}
+
 const nextStep = () => {
   // 校验逻辑
   // 确保 houseInfo 的属性是定义的，避免 undefined
@@ -60,6 +78,9 @@ const nextStep = () => {
     ElMessage.warning('请填写完整的户型信息')
     return
   }
+  
+  // 保存专家权重到 store
+  houseStore.selectionWeights = { ...weights }
   
   // 将 houseInfo 中的数据正确传递到 step2 (假设通过 store 持久化或路由传递)
   // 这里我们已经使用了 pinia store，可以直接跳转
@@ -433,6 +454,78 @@ const openOriginalImage = () => {
           </el-row>
         </el-form>
 
+        <!-- 专家权重调整区域 -->
+        <el-collapse style="margin-top: 20px">
+          <el-collapse-item title="⚙️ 专家参数调整（可选）" name="expert">
+            <div style="color: #909399; font-size: 12px; margin-bottom: 10px;">
+              以下参数用于调整相似案例检索权重，仅供专家使用
+            </div>
+            <el-row :gutter="15">
+              <el-col :span="6">
+                <div class="weight-item">
+                  <span>面积权重</span>
+                  <el-slider v-model="weights.area" :min="0" :max="1" :step="0.05" show-stops />
+                  <span class="weight-value">{{ weights.area }}</span>
+                </div>
+              </el-col>
+              <el-col :span="6">
+                <div class="weight-item">
+                  <span>户型权重</span>
+                  <el-slider v-model="weights.type" :min="0" :max="1" :step="0.05" show-stops />
+                  <span class="weight-value">{{ weights.type }}</span>
+                </div>
+              </el-col>
+              <el-col :span="6">
+                <div class="weight-item">
+                  <span>朝向权重</span>
+                  <el-slider v-model="weights.direction" :min="0" :max="1" :step="0.05" show-stops />
+                  <span class="weight-value">{{ weights.direction }}</span>
+                </div>
+              </el-col>
+              <el-col :span="6">
+                <div class="weight-item">
+                  <span>结构权重</span>
+                  <el-slider v-model="weights.structure" :min="0" :max="1" :step="0.05" show-stops />
+                  <span class="weight-value">{{ weights.structure }}</span>
+                </div>
+              </el-col>
+            </el-row>
+            <el-row :gutter="15" style="margin-top: 10px">
+              <el-col :span="6">
+                <div class="weight-item">
+                  <span>楼层权重</span>
+                  <el-slider v-model="weights.floor" :min="0" :max="1" :step="0.05" show-stops />
+                  <span class="weight-value">{{ weights.floor }}</span>
+                </div>
+              </el-col>
+              <el-col :span="6">
+                <div class="weight-item">
+                  <span>装修权重</span>
+                  <el-slider v-model="weights.decoration" :min="0" :max="1" :step="0.05" show-stops />
+                  <span class="weight-value">{{ weights.decoration }}</span>
+                </div>
+              </el-col>
+              <el-col :span="6">
+                <div class="weight-item">
+                  <span>年份权重</span>
+                  <el-slider v-model="weights.year" :min="0" :max="1" :step="0.05" show-stops />
+                  <span class="weight-value">{{ weights.year }}</span>
+                </div>
+              </el-col>
+              <el-col :span="6">
+                <div class="weight-item">
+                  <span>时间权重</span>
+                  <el-slider v-model="weights.time" :min="0" :max="1" :step="0.05" show-stops />
+                  <span class="weight-value">{{ weights.time }}</span>
+                </div>
+              </el-col>
+            </el-row>
+            <div style="margin-top: 10px; text-align: right;">
+              <el-button size="small" @click="resetWeights">恢复默认</el-button>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+
         <div class="action-footer">
           <el-button type="primary" size="large" @click="nextStep" round>
             下一步：上传环境照片 <el-icon class="el-icon--right"><arrow-right /></el-icon>
@@ -615,5 +708,22 @@ const openOriginalImage = () => {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+.weight-item {
+  text-align: center;
+  padding: 5px;
+}
+.weight-item span {
+  display: block;
+  font-size: 12px;
+  color: #606266;
+  margin-bottom: 5px;
+}
+.weight-value {
+  display: inline-block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #409EFF;
+  font-weight: bold;
 }
 </style>

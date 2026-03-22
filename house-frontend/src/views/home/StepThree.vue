@@ -139,7 +139,8 @@ const fetchValuation = async () => {
     startProgress()
     const payload = {
       ...houseInfo.valuationData,
-      username: houseStore.user?.username || 'admin'
+      username: houseStore.user?.username || 'admin',
+      selection_weights: houseStore.selectionWeights
     }
     const response = await startValuation(payload)
     if (response && response.data && response.data.success) {

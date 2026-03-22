@@ -727,6 +727,9 @@ def api_valuation():
         city = data.get('city', '上海')
         house_type_full = f"{data.get('room')}室{data.get('hall')}厅{data.get('kitchen',1)}厨{data.get('bathroom',1)}卫"
         
+        # 获取专家权重
+        selection_weights = data.get('selection_weights')
+        
         selection_example = careful_selection(
             username=mysql_manager._username, password=mysql_manager._password,
             host=mysql_manager._host, port=mysql_manager._port,
@@ -736,6 +739,7 @@ def api_valuation():
             house_year=int(target_property['built_time']), house_loc=property_data['address'],
             house_direction=target_property.get('direction'), 
             house_structure=target_property.get('structure'),
+            selection_weights=selection_weights,
             city=city
         )
         df = selection_example.selection()
