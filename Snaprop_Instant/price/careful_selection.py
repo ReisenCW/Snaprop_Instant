@@ -124,6 +124,37 @@ class careful_selection:
             return float(f[0]) / 100
         return 0.0
 
+    def _filter_outlier_prices(self, df: pd.DataFrame, threshold: float = 0.30) -> pd.DataFrame:
+        """过滤价格异常值（过高或过低）
+        
+        使用价格中位数作为基准，过滤掉 ±threshold 范围外的案例
+        如果过滤后案例不足3个，则保留原始数据
+        """
+        try:
+            prices = df['u_price'].dropna()
+            if len(prices) < 3:
+                return df
+            
+            median_price = prices.median()
+            lower_bound = median_price * (1 - threshold)
+            upper_bound = median_price * (1 + threshold)
+            
+            original_count = len(df)
+            df_filtered = df[(df['u_price'] >= lower_bound) & (df['u_price'] <= upper_bound)]
+            
+            # 如果过滤后不足3个案例，回退到原始数据
+            if len(df_filtered) < 3:
+                print(f"价格过滤后案例不足，回退到原始数据（过滤前 {original_count} 条）")
+                return df
+            
+            filtered_count = len(df_filtered)
+            print(f"价格过滤完成：{original_count} -> {filtered_count} 条，范围: {lower_bound:.0f} ~ {upper_bound:.0f}")
+            return df_filtered
+            
+        except Exception as e:
+            print(f"价格过滤失败: {e}")
+            return df
+
     @staticmethod
     def _parse_direction(direction_str) -> int:
         """解析朝向，返回价值评分（越高越好）
@@ -198,8 +229,15 @@ class careful_selection:
             )
             df['d_area'] = (df['house_area'].astype(float) - self.target_area).abs()
             
-            # Type vector distance
-            df['d_type'] = df['house_type'].apply(lambda x: np.sum(np.abs(self._parse_house_type(x) - self.target_type_vec)))
+            # Type vector distance - 优化：不同房间类型不同权重
+            # 室 > 厅 > 卫 > 厨
+            def calc_type_distance(type_str):
+                vec = self._parse_house_type(type_str)
+                target = self.target_type_vec
+                # 权重: 室=0.4, 厅=0.3, 厨=0.1, 卫=0.2
+                weights = np.array([0.4, 0.3, 0.1, 0.2])
+                return np.sum(np.abs(vec - target) * weights)
+            df['d_type'] = df['house_type'].apply(calc_type_distance)
             
             df['d_deco'] = df['house_decoration'].apply(self._get_deco_level).apply(
                 lambda x: abs(x - self.target_decoration)
@@ -244,7 +282,14 @@ class careful_selection:
             if 'green_rate' in df.columns:
                 df['green_rate'] = df['green_rate'].apply(self.trans_green_rate)
             
-            return df.sort_values('distinction').head(5).to_dict(orient='records')
+            # 先取5个案例
+            top5 = df.sort_values('distinction').head(5)
+            
+            # ===== 价格异常过滤（对5个案例） =====
+            if 'u_price' in top5.columns and len(top5) >= 3:
+                top5 = self._filter_outlier_prices(top5)
+            
+            return top5.to_dict(orient='records')
 
         except Exception as e:
             print(f"Error in careful selection: {e}")
@@ -284,21 +329,13 @@ class careful_selection:
                     AND transaction_time >= '{min_transaction_date}'
                     HAVING distance <= 2""", "max_dist": 2},
                 
-                # T3: 5公里内 + 放宽条件
+                # T3: 3公里内 + 放宽条件
                 {"sql": f"""SELECT *, {distance_sql} FROM {self.table} 
                     WHERE lng IS NOT NULL AND lat IS NOT NULL
                     AND ABS(house_area - {self.target_area}) <= 50
                     AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 15
                     AND transaction_time >= '{min_transaction_date}'
-                    HAVING distance <= 5""", "max_dist": 5},
-                
-                # T4: 10公里内 + 进一步放宽
-                {"sql": f"""SELECT *, {distance_sql} FROM {self.table} 
-                    WHERE lng IS NOT NULL AND lat IS NOT NULL
-                    AND ABS(house_area - {self.target_area}) <= 80
-                    AND ABS(CAST(house_year AS SIGNED) - {self.target_year}) <= 20
-                    AND transaction_time >= '{min_transaction_date}'
-                    HAVING distance <= 10""", "max_dist": 10},
+                    HAVING distance <= 3""", "max_dist": 3},
             ]
         else:
             # 没有经纬度时使用原有逻辑
