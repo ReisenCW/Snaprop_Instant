@@ -17,7 +17,6 @@ import openpyxl
 from price.careful_selection import careful_selection
 from price.RealEstateValuation import RealEstateValuation
 from record.record import Record
-from database.mysql_manager import MySQLManager
 from report.ocr import OCR_Table
 from report.report_gen import property_report
 
@@ -198,16 +197,6 @@ def extract_trend_factor(prediction_text):
 def allowed_file(filename):
     """检查文件是否允许上传"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-@app.route('/')
-def index():
-    """首页"""
-    return render_template('index.html')
-
-@app.route('/valuation')
-def valuation():
-    """估值页面"""
-    return render_template('valuation.html')
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
@@ -976,60 +965,6 @@ def get_report(filename):
     reports_dir = os.path.join("static", "reports")
     return send_from_directory(reports_dir, filename)
 
-@app.route('/reports')
-def reports():
-    """估值记录列表页面"""
-    reports_dir = os.path.join("static", "reports")
-    os.makedirs(reports_dir, exist_ok=True)
-    
-    reports_list = []
-    for filename in os.listdir(reports_dir):
-        if filename.endswith('.json'):
-            file_path = os.path.join(reports_dir, filename)
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    report_data = json.load(f)
-                
-                # 提取报告信息
-                address = report_data.get('property_data', {}).get('address', '未知地址')
-                estimated_price = report_data.get('estimation_result', {}).get('estimated_price', 0)
-                price_range = report_data.get('estimation_result', {}).get('price_range', None)
-                generated_at = report_data.get('generated_at', '')
-                
-                reports_list.append({
-                    'filename': filename,
-                    'address': address,
-                    'estimated_price': estimated_price,
-                    'price_range': price_range,
-                    'generated_at': generated_at
-                })
-            except Exception as e:
-                print(f"读取报告失败 {filename}: {str(e)}")
-    
-    # 按生成时间排序
-    reports_list.sort(key=lambda x: x['generated_at'], reverse=True)
-    
-    return render_template('reports.html', reports=reports_list)
-
-@app.route('/report/<path:filename>')
-def view_report(filename):
-    """查看估值记录页面"""
-    reports_dir = os.path.join("static", "reports")
-    
-    # 处理不同的路径格式
-    if filename.startswith("static/reports/"):
-        file_path = filename
-    else:
-        file_path = os.path.join(reports_dir, filename)
-    
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            report_data = json.load(f)
-        
-        return render_template('report.html', report=report_data)
-    except Exception as e:
-        return render_template('error.html', error=f"读取报告失败: {str(e)}")
-
 @app.route('/api/history', methods=['GET'])
 def api_get_history():
     """获取指定用户的历史评估报告列表"""
@@ -1202,4 +1137,8 @@ def api_generate_report_content():
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
+    db = MySQLManager()
+    db.init_all_tables()
+    db.close()
+    
     app.run(debug=True, host='127.0.0.1', port=5000) 

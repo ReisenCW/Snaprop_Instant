@@ -79,7 +79,118 @@ class MySQLManager():
             return [r[0] for r in results]
         except mysql.connector.Error as err:
             print(f"获取城市列表失败: {err}")
-            return ["上海", "北京"]
+            return ["上海"]
+
+    def init_city_table(self):
+        """初始化城市列表表"""
+        try:
+            query = """
+            CREATE TABLE IF NOT EXISTS city (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                city_name VARCHAR(50) NOT NULL UNIQUE,
+                city_introduction TEXT,
+                detail TEXT
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+            """
+            self._cursor.execute(query)
+            
+            # 添加默认城市
+            check_query = "SELECT COUNT(*) FROM city WHERE city_name='上海'"
+            self._cursor.execute(check_query)
+            if self._cursor.fetchone()[0] == 0:
+                insert_query = "INSERT INTO city (city_name, city_introduction, detail) VALUES (%s, %s, %s)"
+                self._cursor.execute(insert_query, ("上海", "上海是中国直辖市，国家中心城市，超大城市。", "上海是中国经济、金融、贸易、航运、科技创新中心。"))
+            
+            self._connection.commit()
+            return True
+        except mysql.connector.Error as err:
+            print(f"初始化城市表失败: {err}")
+            return False
+
+    def init_city_data_table(self, city_name):
+        """初始化城市房产数据表"""
+        table_name = self.get_table(city_name)
+        if not table_name:
+            print(f"未知城市: {city_name}")
+            return False
+
+        try:
+            query = f"""
+            CREATE TABLE IF NOT EXISTS `{table_name}` (
+              `id` int NOT NULL AUTO_INCREMENT,
+              `house_type` text,
+              `house_floor` text,
+              `house_direction` text,
+              `house_area` float DEFAULT NULL,
+              `house_structure` text,
+              `transaction_type` varchar(5) DEFAULT NULL,
+              `transaction_time` text,
+              `house_decoration` text,
+              `is_elevator` varchar(3) DEFAULT NULL,
+              `house_year` int DEFAULT NULL,
+              `green_rate` text,
+              `house_loc` text,
+              `house_position` text,
+              `u_price` float DEFAULT NULL,
+              `t_price` int DEFAULT NULL,
+              `detail_url` text,
+              PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+            """
+            self._cursor.execute(query)
+            self._connection.commit()
+            return True
+        except mysql.connector.Error as err:
+            print(f"初始化城市数据表 {table_name} 失败: {err}")
+            return False
+
+    def check_table_exists(self, table_name):
+        """检查表是否存在"""
+        try:
+            query = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=%s AND table_name=%s"
+            self._cursor.execute(query, (self._db, table_name))
+            result = self._cursor.fetchone()
+            return result[0] > 0
+        except mysql.connector.Error as err:
+            print(f"检查表是否存在失败: {err}")
+            return False
+
+    def init_all_tables(self):
+        """初始化所有需要的表"""
+        print("=" * 40)
+        print("检查数据库表...")
+        
+        # 1. users 表
+        if self.check_table_exists('users'):
+            print("✅ users 表已存在")
+        else:
+            self.init_users_table()
+            print("✅ users 表已创建")
+        
+        # 2. user_reports 表
+        if self.check_table_exists('user_reports'):
+            print("✅ user_reports 表已存在")
+        else:
+            self.init_reports_table()
+            print("✅ user_reports 表已创建")
+        
+        # 3. city 表
+        if self.check_table_exists('city'):
+            print("✅ city 表已存在")
+        else:
+            self.init_city_table()
+            print("✅ city 表已创建")
+        
+        # 4. shanghai 表
+        if self.check_table_exists('shanghai'):
+            print("✅ shanghai 表已存在")
+        else:
+            self.init_city_data_table('上海')
+            print("✅ shanghai 表已创建")
+        
+        print("=" * 40)
+        print("✅ 数据库表检查完成")
+        print("=" * 40)
 
     def add_new_city(self, city_name, table_name, intro="", detail=""):
         """管理员：添加新城市并创建对应的数据表"""
