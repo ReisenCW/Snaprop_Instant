@@ -82,16 +82,17 @@ async def predict_region_async(query: str,
         print(f"[api] Parsed Request: Region={region}, TargetTime={target_time}")
 
     # 2. 冷/热启动判断
-    has_exp = await agent.check_experience(region)
-    if not has_exp:
-        backtest_range = get_backtest_time_range(target_time)
-        if debug:
-            print(f"[api] Cold Start detected for {region}. Backtesting {backtest_range} to gain experience...")
-        # 冷启动：必须执行回测流程 (evolve=True) 以获取记忆
-        await perform_evolution_cycle(agent, region, backtest_range, max_retries=1, evolve=True, debug=debug)
-    else:
-        if debug:
-            print(f"[api] Hot Start for {region}. Using existing memory.")
+    # 暂时关闭冷启动判断, 默认不执行回测流程, 以加快响应速度
+    # has_exp = await agent.check_experience(region)
+    # if not has_exp:
+    #     backtest_range = get_backtest_time_range(target_time)
+    #     if debug:
+    #         print(f"[api] Cold Start detected for {region}. Backtesting {backtest_range} to gain experience...")
+    #     # 冷启动：必须执行回测流程 (evolve=True) 以获取记忆
+    #     await perform_evolution_cycle(agent, region, backtest_range, max_retries=1, evolve=True, debug=debug)
+    # else:
+    #     if debug:
+    #         print(f"[api] Hot Start for {region}. Using existing memory.")
 
     # 3. 执行核心目标预测 (是否进化由参数 enable_evolution 决定)
     prediction = await perform_evolution_cycle(agent, region, target_time, max_retries, evolve=enable_evolution, debug=debug)
