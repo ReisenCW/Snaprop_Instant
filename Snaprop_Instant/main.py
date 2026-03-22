@@ -156,7 +156,7 @@ class PropertyValuationSystem:
                     'fitment': '简装',
                     'built_time': '2010',
                     'transaction_time': '2023-03-01',
-                    'green_rate': 0.25,
+                    'green_rate': 0.35,
                     'address': '示例小区B',
                     'transaction_type': 1
                 },

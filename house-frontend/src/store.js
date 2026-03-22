@@ -10,7 +10,7 @@ export const houseStore = reactive({
   kitchens: 1,
   bathrooms: 1,
   structure: '平层',
-  green_rate: 25,
+  green_rate: 35,
   decoration: '精装',
   floor: '中',
   direction: '南',
@@ -47,7 +47,7 @@ export const houseStore = reactive({
     this.kitchens = 1
     this.bathrooms = 1
     this.structure = '平层'
-    this.green_rate = 25
+    this.green_rate = 35
     this.decoration = '精装'
     this.floor = '中'
     this.direction = '南'

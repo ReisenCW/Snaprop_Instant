@@ -35,7 +35,7 @@ const nextStep = () => {
     return
   }
   // 简单的地址长度校验
-  if (address.length < 5) {
+  if (address.length < 2) {
      ElMessage.warning('房产地址似乎过短，请输入完整地址')
      return
   }
