@@ -171,7 +171,8 @@ const restartProcess = () => {
   houseInfo.valuationData = null
   // 清空表单数据，让用户重新填写
   houseStore.reset()
-  router.push('/home/step1')
+  // Force full page reload to ensure clean state
+  window.location.href = '/home/step1'
 }
 
 const goToHistory = () => {
