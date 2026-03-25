@@ -1,0 +1,11 @@
+[project]
+name = "housingestatepriceprediction"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alibabacloud-ocr-api20210707==3.1.3",
+    "chromadb>=1.5.5",
+    "dashscope>=1.25.15",
+]

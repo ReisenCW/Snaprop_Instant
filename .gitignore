@@ -60,3 +60,4 @@ logs/
 
 # Claude
 CLAUDE.md
+.claude/

@@ -1,13 +1,10 @@
 # MySQL数据库配置
-# mysql_host = "47.115.208.84"
-# mysql_db = "house"
-# mysql_port = 3306
-# mysql_username = "house"
-# mysql_password = "123456"
+import os
 
-# 本地
-mysql_host = "localhost"
-mysql_db = "house"
-mysql_port = 3306
-mysql_username = "root"
-mysql_password = "050117"
+# 优先使用环境变量（Docker部署时）
+# 否则使用本地配置
+mysql_host = os.getenv("MYSQL_HOST", "localhost")
+mysql_db = os.getenv("MYSQL_DATABASE", "house")
+mysql_port = int(os.getenv("MYSQL_PORT", "3306"))
+mysql_username = os.getenv("MYSQL_USER", "root")
+mysql_password = os.getenv("MYSQL_PASSWORD", "050117")
