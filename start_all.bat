@@ -32,7 +32,7 @@ echo.
 REM 启动 Flask 后端
 echo [信息] 正在启动 Flask 后端...
 cd /d "Snaprop_Instant"
-start "Flask 后端" cmd /k "echo 后端服务启动中... && python app.py"
+start "Flask 后端" cmd /k "echo 后端服务启动中... && .venv\Scripts\python.exe app.py"
 echo [信息] Flask 后端已启动（新窗口）
 echo.
 

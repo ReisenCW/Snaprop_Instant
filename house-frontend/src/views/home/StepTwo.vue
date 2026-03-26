@@ -176,7 +176,7 @@ const handlePictureCardPreview = (file) => {
       </el-button>
 
       <!-- LLM Prediction Toggle (Placed in middle) -->
-      <div class="llm-toggle-footer">
+      <!-- <div class="llm-toggle-footer">
         <el-icon class="magic-icon"><magic-stick /></el-icon>
         <span class="toggle-text">大模型预测微调</span>
         <el-switch
@@ -188,7 +188,7 @@ const handlePictureCardPreview = (file) => {
         <el-tooltip content="开启后将结合最新市场趋势数据通过大模型进行价格修正" placement="top">
           <el-icon class="info-icon"><info-filled /></el-icon>
         </el-tooltip>
-      </div>
+      </div> -->
 
       <el-button type="success" size="large" @click="startAnalysis" :icon="Promotion" round shadow>
         开始估值分析

@@ -49,6 +49,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { houseStore } from '../store'
+import { API_BASE_URL } from '../config'
 
 const router = useRouter()
 const isLogin = ref(true)
@@ -103,7 +104,7 @@ const handleSubmit = async () => {
 
     loading.value = true
     try {
-      const url = isLogin.value ? 'http://localhost:5000/api/login' : 'http://localhost:5000/api/register'
+      const url = isLogin.value ? `${API_BASE_URL}/api/login` : `${API_BASE_URL}/api/register`
       const payload = isLogin.value 
         ? { account: form.account, password: form.password }
         : { username: form.account, email: form.email, password: form.password, confirm_password: form.confirm_password }

@@ -4,6 +4,7 @@ import { houseStore } from './store'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
+import { API_BASE_URL } from './config'
 
 const router = useRouter()
 
@@ -30,7 +31,7 @@ const handleChangePassword = async () => {
   }
   
   try {
-    const response = await axios.post('http://localhost:5000/api/change_password', {
+    const response = await axios.post(`${API_BASE_URL}/api/change_password`, {
       username: houseStore.user.username,
       old_password: passwordForm.oldPassword,
       new_password: passwordForm.newPassword

@@ -1080,7 +1080,7 @@ def api_upload_cert():
 
         return jsonify({
             'success': True,
-            'url': f"http://127.0.0.1:5000/static/uploads/{new_filename}", # 使用完整 URL 解决前端显示问题
+            'url': f"/static/uploads/{new_filename}",  # 使用相对路径，nginx 代理
             'file_path': file_path,
             'table_data': structured_data  # 统一返回 JSON 对象数组
         })
@@ -1149,4 +1149,4 @@ if __name__ == '__main__':
     db.init_all_tables()
     db.close()
     
-    app.run(debug=True, host='127.0.0.1', port=5000) 
+    app.run(debug=False, host='0.0.0.0', port=5000) 
