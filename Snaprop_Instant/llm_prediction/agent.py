@@ -147,7 +147,8 @@ class HousePriceAgent:
         # 尝试解析预测结果（通常在末尾或指定标记后）
         if "房价预测结果:" in output:
             _, pred = output.split("房价预测结果:", 1)
-            pred = pred.strip()
+            # 只取第一行作为预测结果，避免置信度、对冲情景等额外内容
+            pred = pred.strip().split('\n')[0].strip()
         else:
             # 回退逻辑：取最后一行作为结果
             lines = output.splitlines()

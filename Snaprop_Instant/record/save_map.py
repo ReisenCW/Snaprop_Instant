@@ -20,7 +20,7 @@ def get_origin_place(place_name, city, status):  # 定位函数
     # 1. 尝试地点检索 (Place Search API) - 适用于小区名、POI
     url = f"https://api.map.baidu.com/place/v2/search?query={clean_place_name}&region={city}&output=json&ak={baidu_api_key}"
     try:
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=10)
         result = response.json()
         if result.get('status') == 0 and result.get('results'):
             location = result['results'][0]['location']
@@ -34,7 +34,7 @@ def get_origin_place(place_name, city, status):  # 定位函数
     # 2. 如果地点检索失败，尝试地理编码 (Geocoding API) - 适用于具体门牌号、路弄
     geocode_url = f"https://api.map.baidu.com/geocoding/v3/?address={place_name}&city={city}&output=json&ak={baidu_api_key}"
     try:
-        response = requests.get(geocode_url, timeout=5)
+        response = requests.get(geocode_url, timeout=10)
         result = response.json()
         if result.get('status') == 0 and result.get('result'):
             location = result['result']['location']
@@ -56,7 +56,7 @@ def get_origin_place(place_name, city, status):  # 定位函数
 def get_nearby_places(location, search_place_name, radius=2000):  # 搜索函数
     url = f"https://api.map.baidu.com/place/v2/search?location={location}&radius={radius}&query={search_place_name}&output=json&ak={baidu_api_key}"
     try:
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=10)
         result = response.json()
         if result.get('status') == 0 and result.get('results'):
             return [r['name'] for r in result['results']]
@@ -71,7 +71,7 @@ def map_location(location):
     url = f"https://api.map.baidu.com/staticimage/v2?ak={baidu_api_key}&width=512&height=400&zoom=16&scale=2&center={location}&markers={location}"
     # 发送HTTP GET请求获取图片
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=20)
         # 检查请求是否成功
         if response.status_code == 200:
             # 将响应内容转换为二进制流

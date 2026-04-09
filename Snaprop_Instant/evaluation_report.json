@@ -1,0 +1,191 @@
+{
+  "summary": {
+    "MAE": 0.37,
+    "RMSE": 0.84,
+    "trend_accuracy": 0.9,
+    "valid_count": 20,
+    "total_count": 20
+  },
+  "details": [
+    {
+      "region": "上海市杨浦区五角场",
+      "period": "2025年1月-6月",
+      "pred_text": "小幅上升, 涨幅约1%-1.5%",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": 0.0125,
+      "actual_val": -0.012,
+      "accuracy": 0.0
+    },
+    {
+      "region": "上海市杨浦区五角场",
+      "period": "2025年7月-12月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市浦东新区陆家嘴",
+      "period": "2025年1月-6月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市浦东新区陆家嘴",
+      "period": "2025年7月-12月",
+      "pred_text": "- 小幅下降, 跌幅约1.0%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.01,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市徐汇区徐家汇",
+      "period": "2025年1月-6月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市徐汇区徐家汇",
+      "period": "2025年7月-12月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市静安区南京西路",
+      "period": "2025年1月-6月",
+      "pred_text": "- 小幅上升, 涨幅约1.5%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": 0.015,
+      "actual_val": -0.012,
+      "accuracy": 0.0
+    },
+    {
+      "region": "上海市静安区南京西路",
+      "period": "2025年7月-12月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市黄浦区外滩",
+      "period": "2025年1月-6月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市黄浦区外滩",
+      "period": "2025年7月-12月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市长宁区虹桥",
+      "period": "2025年1月-6月",
+      "pred_text": "小幅下降, 跌幅约1.5%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.015,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市长宁区虹桥",
+      "period": "2025年7月-12月",
+      "pred_text": "- 小幅下降, 跌幅约1.8%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.018000000000000002,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市普陀区长征",
+      "period": "2025年1月-6月",
+      "pred_text": "- 小幅下降, 跌幅约1.5%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.015,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市普陀区长征",
+      "period": "2025年7月-12月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市虹口区四川北路",
+      "period": "2025年1月-6月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市虹口区四川北路",
+      "period": "2025年7月-12月",
+      "pred_text": "- 小幅下降, 跌幅约1.8%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.018000000000000002,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市闵行区莘庄",
+      "period": "2025年1月-6月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市闵行区莘庄",
+      "period": "2025年7月-12月",
+      "pred_text": "小幅下降, 跌幅约1.0%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.01,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市宝山区大场",
+      "period": "2025年1月-6月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    },
+    {
+      "region": "上海市宝山区大场",
+      "period": "2025年7月-12月",
+      "pred_text": "- 小幅下降, 跌幅约1.2%左右",
+      "actual_text": "- 小幅下降, 跌幅约1.2%左右",
+      "pred_val": -0.012,
+      "actual_val": -0.012,
+      "accuracy": 1.0
+    }
+  ]
+}

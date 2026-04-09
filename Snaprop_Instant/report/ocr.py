@@ -79,7 +79,7 @@ class OCR_Table:
     def download_xlsx(self, urls, img_name):
         save_paths = []
         for i, url in enumerate(urls):
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=20)
             response.raise_for_status()
             save_path = self.trans_to_path(img_name, i)
             with open(save_path, 'wb') as f:

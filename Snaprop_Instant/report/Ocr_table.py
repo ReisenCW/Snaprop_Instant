@@ -54,8 +54,8 @@ class OCR_Table:
             table_config=ocr_api_20210707_models.RecognizeAllTextRequestTableConfig(output_table_excel=True)
         )
         runtime = util_models.RuntimeOptions(
-            connect_timeout=30,
-            read_timeout=60
+            connect_timeout=60,
+            read_timeout=120
         )
         try:
             resp = client.recognize_all_text_with_options(recognize_all_text_request, runtime)
