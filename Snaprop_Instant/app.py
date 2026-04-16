@@ -1053,7 +1053,7 @@ def api_upload_cert():
                 2. 必须包含的字段：房产地址、城市、建筑面积、户型、建成年份、权利人、共有情况、登记日期。
                 3. 如果某项不存在，value 设为空字符串。
                 4. 只返回 JSON 代码块，不要有其他解释。"""
-                llm_reply = call_llm(model="qwen-flash", system_prompt=sys_prompt, prompt="OCR识别出的乱序文本：" + raw_text_content)
+                llm_reply = call_llm(model="qwen-turbo-latest", system_prompt=sys_prompt, prompt="OCR识别出的乱序文本：" + raw_text_content)
                 
                 # 提取 JSON 部分
                 json_match = re.search(r'\[.*\]', llm_reply, re.DOTALL)
