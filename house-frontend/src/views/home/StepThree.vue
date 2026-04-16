@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, Download, Share, Refresh, Printer, Document, Clock } from '@element-plus/icons-vue'
+import { Check, Download, Share, Refresh, Printer, Document, Clock, CircleCloseFilled, ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import MarkdownIt from 'markdown-it'
@@ -18,6 +18,7 @@ const md = new MarkdownIt({
 
 const router = useRouter()
 const isLoading = ref(true)
+const hasError = ref(false)
 const loadingProgress = ref(0)
 const loadingStage = ref(0)
 const baseLoadingStages = [
@@ -155,6 +156,7 @@ const fetchValuation = async () => {
     }
   } catch (error) {
     console.error('Valuation Error:', error)
+    hasError.value = true
     ElMessage.error(`智能评估分析失败: ${error.message || '请检查后端连接'}`)
   } finally {
     isLoading.value = false
@@ -173,6 +175,10 @@ const restartProcess = () => {
   houseStore.reset()
   // Force full page reload to ensure clean state
   window.location.href = '/home/step1'
+}
+
+const goBack = () => {
+  router.push('/home/step2')
 }
 
 const goToHistory = () => {
@@ -296,7 +302,23 @@ const formatYear = (val) => {
       </div>
     </div>
 
-<div v-else-if="valuationResult" class="report-content">
+    <div v-else-if="hasError" class="error-state">
+      <div class="error-card">
+        <el-icon class="error-icon"><CircleCloseFilled /></el-icon>
+        <h2 class="error-title">评估失败</h2>
+        <p class="error-desc">智能评估分析未能完成，请检查后端服务状态或网络连接</p>
+        <div class="error-actions">
+          <el-button type="primary" :icon="Refresh" @click="restartProcess" size="large" round>
+            重新开始评估
+          </el-button>
+          <el-button type="info" plain :icon="ArrowLeft" @click="goBack" size="large" round>
+            返回上一步
+          </el-button>
+        </div>
+      </div>
+    </div>
+
+    <div v-else-if="valuationResult" class="report-content">
       <!-- Result Summary Card -->
       <div class="report-header no-print">
         <div class="title-meta">
@@ -422,6 +444,48 @@ const formatYear = (val) => {
   justify-content: center;
   align-items: center;
   padding: 60px 0;
+}
+
+.error-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 60px 0;
+}
+
+.error-card {
+  background: white;
+  padding: 50px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  width: 100%;
+  max-width: 600px;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 4rem;
+  color: #F56C6C;
+  margin-bottom: 20px;
+}
+
+.error-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #303133;
+  margin: 20px 0 10px;
+}
+
+.error-desc {
+  color: #909399;
+  margin-bottom: 30px;
+}
+
+.error-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .loading-card {
