@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Check, Download, Share, Refresh, Printer, Document, Clock, CircleCloseFilled, ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -114,6 +114,40 @@ const estimatedPrice = computed(() => {
   if (!valuationResult.value) return 0
   return valuationResult.value.estimation_result?.estimated_price || valuationResult.value.estimated_price || 0
 })
+
+// Count-up animation values
+const displayTotalPrice = ref(0)
+const displayEstimatedPrice = ref(0)
+
+// Animate value from start to end
+const animateValue = (targetRef, endValue, duration = 1500) => {
+  const startValue = 0
+  const range = endValue - startValue
+  const startTime = performance.now()
+
+  const animate = (currentTime) => {
+    const elapsed = currentTime - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    // cubic ease-out
+    const easeOut = 1 - Math.pow(1 - progress, 3)
+    targetRef.value = startValue + range * easeOut
+    if (progress < 1) {
+      requestAnimationFrame(animate)
+    }
+  }
+  requestAnimationFrame(animate)
+}
+
+// Watch for valuation result to trigger count-up animation
+watch(valuationResult, (newVal) => {
+  if (newVal) {
+    // Small delay to let the UI render first
+    setTimeout(() => {
+      animateValue(displayTotalPrice, totalPrice.value)
+      animateValue(displayEstimatedPrice, estimatedPrice.value)
+    }, 300)
+  }
+}, { immediate: false })
 
 const confidence = computed(() => {
   if (!valuationResult.value) return 0
@@ -359,13 +393,13 @@ const formatYear = (val) => {
               </div>
             </template>
             <div class="valuation-showcase">
-              <el-statistic title="估值总价 (万元)" :value="totalPrice" :precision="2">
+              <el-statistic title="估值总价 (万元)" :value="displayTotalPrice" :precision="2">
                 <template #suffix>
                   <span class="unit-label">万</span>
                 </template>
               </el-statistic>
               <el-divider direction="vertical" class="stat-divider" />
-              <el-statistic title="预估单价 (元/m²)" :value="estimatedPrice" :precision="0">
+              <el-statistic title="预估单价 (元/m²)" :value="displayEstimatedPrice" :precision="0">
                 <template #prefix>
                   <span class="currency-label">¥</span>
                 </template>
