@@ -9,6 +9,7 @@ import { houseStore } from '@/store'
 import * as XLSX from 'xlsx'
 import { uploadCert, exportExcel as exportExcelApi } from '@/api'
 import { API_BASE_URL } from '@/config'
+import { compressImageIfNeeded } from '@/utils/imageCompression'
 
 const router = useRouter()
 const isLoading = ref(false)
@@ -17,6 +18,7 @@ const cropperImg = ref('')
 const cropperRef = ref(null)
 const uploadedImageUrl = ref('')
 const currentFile = ref(null)
+const originalFileName = ref('') // Store original filename for compressed uploads
 
 // OCR Table data
 const ocrTableData = ref([])
@@ -87,30 +89,46 @@ const nextStep = () => {
   router.push('/home/step2')
 }
 
-const handleBeforeUpload = (file) => {
+const handleBeforeUpload = async (file) => {
   const isImage = file.type.startsWith('image/')
   if (!isImage) {
     ElMessage.error('请上传图片文件 (JPG, PNG)')
     return false
   }
-  // 限制文件大小，例如 10MB
-  const isLt10M = file.size / 1024 / 1024 < 10
-  if (!isLt10M) {
-    ElMessage.error('上传图片大小不能超过 10MB!')
-    return false
-  }
 
+  // Store original filename
+  originalFileName.value = file.name
   currentFile.value = file
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    cropperImg.value = e.target.result
-    cropperVisible.value = true
+
+  // Compress if larger than 10MB
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.info('图片较大，正在压缩...')
+    const compressed = await compressImageIfNeeded(file, 18432)
+    if (!compressed) {
+      ElMessage.error('图片压缩后仍超过20MB，请上传更小的图片')
+      return false
+    }
+    // Use compressed blob for cropper preview
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      cropperImg.value = e.target.result
+      cropperVisible.value = true
+    }
+    reader.onerror = () => {
+      ElMessage.error('读取文件失败，请重试')
+    }
+    reader.readAsDataURL(compressed)
+  } else {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      cropperImg.value = e.target.result
+      cropperVisible.value = true
+    }
+    reader.onerror = () => {
+      ElMessage.error('读取文件失败，请重试')
+    }
+    reader.readAsDataURL(file)
   }
-  // 错误处理
-  reader.onerror = () => {
-    ElMessage.error('读取文件失败，请重试')
-  }
-  reader.readAsDataURL(file)
   return false // Prevent auto upload by el-upload default action
 }
 

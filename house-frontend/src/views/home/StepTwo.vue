@@ -5,6 +5,7 @@ import { CameraFilled, ArrowLeft, Promotion, ZoomIn, Delete, MagicStick, InfoFil
 import { ElMessage } from 'element-plus'
 import { houseStore } from '@/store'
 import { startValuation } from '@/api'
+import { compressImageIfNeeded } from '@/utils/imageCompression'
 
 const router = useRouter()
 const fileList = ref([])
@@ -23,7 +24,7 @@ const prevStep = () => {
 
 const startAnalysis = async () => {
   if (fileList.value.length === 0) {
-    ElMessage.warning('请至少上传一张房产外观或环境图片以继续')
+    ElMessage.warning('请上传一张房产外观或环境图片以继续')
     return
   }
   
@@ -58,32 +59,40 @@ const startAnalysis = async () => {
   }
 }
 
-const handleBeforeUpload = (file) => {
+const handleBeforeUpload = async (file) => {
   const isJPG = file.type === 'image/jpeg' || file.type === 'image/png'
   if (!isJPG) {
     ElMessage.error('仅支持上传 JPG 或 PNG 图片文件')
     return false
   }
 
+  // Clear existing file (single file mode - replace instead of append)
+  fileList.value = []
+
+  let fileToProcess = file
+
+  // Compress if larger than 18MB (to leave margin for base64 overhead)
+  if (file.size > 18 * 1024 * 1024) {
+    ElMessage.info('图片较大，正在压缩...')
+    const compressed = await compressImageIfNeeded(file, 18432)
+    if (!compressed) {
+      ElMessage.error('图片压缩后仍超过20MB，请上传更小的图片')
+      return false
+    }
+    fileToProcess = compressed
+  }
+
   // Convert to Base64
   const reader = new FileReader()
-  reader.readAsDataURL(file)
+  reader.readAsDataURL(fileToProcess)
   reader.onload = () => {
-    // 找到刚才 v-model 自动加进来的那个文件对象
-    const targetFile = fileList.value.find(f => f.raw === file || f.name === file.name)
-    if (targetFile) {
-      targetFile.url = reader.result // 替换为 base64 用于显示和提交
-      targetFile.status = 'success'
-    } else {
-      // 兼容兜底
-      fileList.value.push({
-        name: file.name,
-        url: reader.result,
-        raw: file,
-        status: 'success',
-        uid: Date.now() + Math.random()
-      })
-    }
+    fileList.value.push({
+      name: file.name,
+      url: reader.result,
+      raw: fileToProcess,
+      status: 'success',
+      uid: Date.now() + Math.random()
+    })
     ElMessage.success('图片读取成功')
   }
   reader.onerror = (error) => {
@@ -122,7 +131,6 @@ const handlePictureCardPreview = (file) => {
         action="#"
         list-type="picture-card"
         v-model:file-list="fileList"
-        multiple
         :auto-upload="false"
         :on-remove="handleRemove"
         :on-change="(file) => { if(file.status === 'ready') handleBeforeUpload(file.raw) }"
