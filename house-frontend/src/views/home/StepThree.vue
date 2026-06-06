@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Check, Download, Share, Refresh, Printer, Document, Clock, CircleCloseFilled, ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -104,15 +104,16 @@ const isGeneratingPdf = ref(false)
 const showReportDialog = ref(false)
 
 // Computed properties for safe data access
-const totalPrice = computed(() => {
-  if (!valuationResult.value) return 0
-  const tp = valuationResult.value.total_price || (estimatedPrice.value * (houseInfo.area || 100))
-  return tp / 10000
-})
-
 const estimatedPrice = computed(() => {
   if (!valuationResult.value) return 0
   return valuationResult.value.estimation_result?.estimated_price || valuationResult.value.estimated_price || 0
+})
+
+const totalPrice = computed(() => {
+  if (!valuationResult.value) return 0
+  const area = houseInfo.area || 100
+  const tp = valuationResult.value.total_price || (estimatedPrice.value * area)
+  return tp / 10000
 })
 
 // Count-up animation values
@@ -202,13 +203,17 @@ onMounted(() => {
   fetchValuation()
 })
 
+onUnmounted(() => {
+  clearProgress()
+})
+
 const restartProcess = () => {
   // 清除上次估值数据，确保重新评估时走完整流程
   houseInfo.valuationData = null
   // 清空表单数据，让用户重新填写
   houseStore.reset()
-  // Force full page reload to ensure clean state
-  window.location.href = '/home/step1'
+  // Navigate to step 1 via router (avoids full page reload)
+  router.push('/home/step1')
 }
 
 const goBack = () => {
@@ -221,8 +226,12 @@ const goToHistory = () => {
 
 const generateFullReport = () => {
   if (valuationResult.value) {
-    const report_id = valuationResult.value.report_id
-    const routeData = router.resolve({ name: 'report-detail', params: { id: report_id } })
+    const rid = valuationResult.value.report_id || reportId.value
+    if (!rid) {
+      ElMessage.warning('报告 ID 缺失，无法生成详情预览')
+      return
+    }
+    const routeData = router.resolve({ name: 'report-detail', params: { id: rid } })
     window.open(routeData.href, '_blank')
   } else {
     ElMessage.warning('详情预览尚未生成')
@@ -464,15 +473,26 @@ const formatYear = (val) => {
 .valuation-footer-actions .el-button {
   margin: 0;
   min-width: 180px;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.valuation-footer-actions .el-button:hover {
+  transform: translateY(-2px);
 }
 
 .step-three-container {
   max-width: 1200px;
   margin: 0 auto;
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeSlideIn 0.45s ease-out;
   padding: 20px;
 }
 
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Loading State ── */
 .loading-state {
   display: flex;
   justify-content: center;
@@ -480,60 +500,33 @@ const formatYear = (val) => {
   padding: 60px 0;
 }
 
-.error-state {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 60px 0;
-}
-
-.error-card {
-  background: white;
-  padding: 50px;
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-  width: 100%;
-  max-width: 600px;
-  text-align: center;
-}
-
-.error-icon {
-  font-size: 4rem;
-  color: #F56C6C;
-  margin-bottom: 20px;
-}
-
-.error-title {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: #303133;
-  margin: 20px 0 10px;
-}
-
-.error-desc {
-  color: #909399;
-  margin-bottom: 30px;
-}
-
-.error-actions {
-  display: flex;
-  gap: 15px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
 .loading-card {
   background: white;
-  padding: 50px;
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  padding: 56px 48px;
+  border-radius: 24px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.06);
   width: 100%;
-  max-width: 600px;
+  max-width: 620px;
   text-align: center;
+}
+
+.loading-animation {
+  margin-bottom: 16px;
+}
+
+.main-loading-icon {
+  font-size: 3.5rem;
+  color: #409eff;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.95); }
 }
 
 .loading-title {
-  font-size: 1.6rem;
+  font-size: 1.7rem;
   font-weight: 700;
   color: #303133;
   margin: 20px 0 10px;
@@ -541,22 +534,28 @@ const formatYear = (val) => {
 
 .loading-desc {
   color: #909399;
-  margin-bottom: 30px;
+  margin-bottom: 36px;
+  font-size: 0.98rem;
 }
 
 .progress-wrapper {
-  margin-bottom: 40px;
+  margin-bottom: 44px;
 }
 
 .custom-progress :deep(.el-progress-bar__outer) {
   background-color: #f0f2f5;
+  border-radius: 20px;
+}
+
+.custom-progress :deep(.el-progress-bar__inner) {
+  border-radius: 20px;
 }
 
 .loading-stages {
   text-align: left;
-  background: #f8fafc;
-  padding: 25px;
-  border-radius: 12px;
+  background: linear-gradient(135deg, #f8fafc, #f0f4f8);
+  padding: 28px;
+  border-radius: 16px;
   border: 1px solid #edf2f7;
 }
 
@@ -565,8 +564,10 @@ const formatYear = (val) => {
   align-items: center;
   gap: 12px;
   margin-bottom: 15px;
-  opacity: 0.5;
-  transition: all 0.3s ease;
+  padding: 6px 8px;
+  border-radius: 8px;
+  opacity: 0.45;
+  transition: all 0.35s ease;
 }
 
 .stage-item:last-child {
@@ -575,9 +576,10 @@ const formatYear = (val) => {
 
 .stage-item.active {
   opacity: 1;
-  transform: translateX(5px);
+  transform: translateX(8px);
   color: #409eff;
   font-weight: 500;
+  background: rgba(64,158,255,0.04);
 }
 
 .stage-item.completed {
@@ -586,7 +588,8 @@ const formatYear = (val) => {
 }
 
 .stage-icon {
-  font-size: 1.2rem;
+  font-size: 1.3rem;
+  flex-shrink: 0;
 }
 
 .stage-icon.success {
@@ -605,13 +608,64 @@ const formatYear = (val) => {
   font-size: 0.95rem;
 }
 
+/* ── Error State ── */
+.error-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 60px 0;
+}
+
+.error-card {
+  background: white;
+  padding: 56px;
+  border-radius: 24px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.06);
+  width: 100%;
+  max-width: 600px;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 4.5rem;
+  color: #F56C6C;
+  margin-bottom: 20px;
+  animation: shake 0.6s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+
+.error-title {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: #303133;
+  margin: 20px 0 10px;
+}
+
+.error-desc {
+  color: #909399;
+  margin-bottom: 32px;
+}
+
+.error-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Result Content ── */
 .report-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   margin-bottom: 30px;
   padding-bottom: 20px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 2px solid #f0f2f5;
 }
 
 .report-title {
@@ -621,77 +675,54 @@ const formatYear = (val) => {
   margin-bottom: 8px;
 }
 
+/* Valuation Card */
 .main-valuation-card {
   margin-bottom: 24px;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.main-valuation-card :deep(.el-card__header) {
+  background: linear-gradient(135deg, #f8fafc, #f0f4f8);
+  border-bottom: 1px solid #ebeef5;
+}
+
+.house-info-card {
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .explanation-card {
   margin-bottom: 24px;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .explanation-text {
-  line-height: 1.6;
+  line-height: 1.8;
   color: #303133;
 }
 
-/* Markdown Rendering Styles */
-:deep(.markdown-body) {
-  font-size: 15px;
-}
-
-:deep(.markdown-body h3) {
-  margin-top: 1.5em;
-  margin-bottom: 0.8em;
-  color: #303133;
-  border-left: 4px solid #409eff;
-  padding-left: 10px;
-}
-
-:deep(.markdown-body h4) {
-  margin-top: 1.2em;
-  margin-bottom: 0.6em;
-  color: #409eff;
-}
-
-:deep(.markdown-body table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1em 0;
-  font-size: 13px;
-  /* overflow-x: auto; */
-  /* display: block; */
-  display: table;
-}
-
-:deep(.markdown-body th), :deep(.markdown-body td) {
-  border: 1px solid #ebeef5;
-  padding: 8px 12px;
-  text-align: left;
-}
-
-:deep(.markdown-body th) {
-  background-color: #f5f7fa;
-  color: #909399;
-}
-
-:deep(.markdown-body blockquote) {
-  margin: 1em 0;
-  padding: 10px 15px;
-  color: #606266;
-  background-color: #fcfcfc;
-  border-left: 5px solid #E4E7ED;
-}
-
-:deep(.markdown-body ul), :deep(.markdown-body ol) {
-  padding-left: 20px;
-  margin-bottom: 1em;
-}
-
+/* Valuation Showcase */
 .valuation-showcase {
   display: flex;
   justify-content: space-around;
   align-items: center;
-  padding: 20px 0;
+  padding: 32px 16px;
+  background: linear-gradient(135deg, #fafbff 0%, #f5f7ff 100%);
+  border-radius: 16px;
+  margin: 8px 0;
+}
+
+.valuation-showcase :deep(.el-statistic__head) {
+  font-size: 0.9rem;
+  color: #909399;
+  font-weight: 500;
+}
+
+.valuation-showcase :deep(.el-statistic__number) {
+  font-size: 2.4rem;
+  font-weight: 800;
 }
 
 .stat-divider {
@@ -705,20 +736,99 @@ const formatYear = (val) => {
   margin-left: 5px;
 }
 
-.analysis-status-card {
-  margin-bottom: 24px;
+/* Markdown Rendering Styles */
+:deep(.markdown-body) {
+  font-size: 15px;
+  line-height: 1.8;
 }
 
-.restart-container {
-  margin-top: 20px;
+:deep(.markdown-body h3) {
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+  color: #303133;
+  border-left: 4px solid #409eff;
+  padding-left: 12px;
 }
 
-.restart-container :deep(.el-button) {
+:deep(.markdown-body h4) {
+  margin-top: 1.2em;
+  margin-bottom: 0.6em;
+  color: #409eff;
+}
+
+:deep(.markdown-body table) {
   width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 13px;
+  display: table;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+:deep(.markdown-body th), :deep(.markdown-body td) {
+  border: 1px solid #ebeef5;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+:deep(.markdown-body th) {
+  background-color: #f5f7fa;
+  color: #606266;
+  font-weight: 600;
+}
+
+:deep(.markdown-body tbody tr:hover) {
+  background-color: #fafbfc;
+}
+
+:deep(.markdown-body blockquote) {
+  margin: 1em 0;
+  padding: 12px 18px;
+  color: #606266;
+  background-color: #f8f9fb;
+  border-left: 4px solid #409eff;
+  border-radius: 0 8px 8px 0;
+}
+
+:deep(.markdown-body ul), :deep(.markdown-body ol) {
+  padding-left: 24px;
+  margin-bottom: 1em;
+}
+
+:deep(.markdown-body li) {
+  margin-bottom: 4px;
+}
+
+/* Print */
+@media print {
+  .no-print { display: none !important; }
+  .step-three-container {
+    padding: 0;
+    max-width: 100%;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .valuation-showcase {
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+  }
+  .stat-divider {
+    height: 1px;
+    width: 80%;
+    margin: 0;
+  }
+  .valuation-showcase :deep(.el-statistic__number) {
+    font-size: 1.8rem;
+  }
+  .report-title {
+    font-size: 1.6rem;
+  }
+  .loading-card, .error-card {
+    padding: 36px 24px;
+  }
 }
 </style>

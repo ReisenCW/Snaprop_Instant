@@ -7,7 +7,7 @@ import 'vue-cropper/dist/index.css'
 import { VueCropper } from 'vue-cropper'
 import { houseStore } from '@/store'
 import * as XLSX from 'xlsx'
-import { uploadCert, exportExcel as exportExcelApi } from '@/api'
+import { uploadCert } from '@/api'
 import { API_BASE_URL } from '@/config'
 import { compressImageIfNeeded } from '@/utils/imageCompression'
 
@@ -68,7 +68,7 @@ const nextStep = () => {
     ElMessage.warning('请输入有效的建筑面积')
     return
   }
-  // 修正年份校验逻辑：houseInfo.year 应该是一个有效对象或值
+  // 修正年份校验逻辑
   if (!houseInfo.year) {
     ElMessage.warning('请选择建成年份')
     return
@@ -261,11 +261,6 @@ const downloadExcel = () => {
       console.error(e)
       ElMessage.error('导出失败')
   }
-}
-
-const handleUploadSuccess = (response) => {
-  // Logic to handle OCR result from backend
-  console.log('OCR Result:', response)
 }
 
 const reUpload = () => {
@@ -577,7 +572,12 @@ const openOriginalImage = () => {
 
 <style scoped>
 .step-one-container {
-  animation: fadeIn 0.5s ease-in-out;
+  animation: fadeSlideIn 0.5s ease-out;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .header-section {
@@ -587,7 +587,8 @@ const openOriginalImage = () => {
 .step-title {
   color: #2c3e50;
   font-size: 1.8rem;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+  font-weight: 700;
 }
 
 .step-description {
@@ -597,7 +598,12 @@ const openOriginalImage = () => {
 }
 
 .upload-card, .form-card, .image-display-card, .ocr-table-card {
-  border-radius: 12px;
+  border-radius: 16px;
+  transition: box-shadow 0.3s ease;
+}
+
+.upload-card:hover, .form-card:hover, .image-display-card:hover, .ocr-table-card:hover {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
 }
 
 .upload-ocr-row {
@@ -646,8 +652,15 @@ const openOriginalImage = () => {
 
 :deep(.el-upload-dragger) {
   padding: 60px 20px;
-  background-color: #fafafa;
-  border: 2px dashed #dcdfe6;
+  background-color: #fafbfc;
+  border: 2px dashed #d0d7de;
+  border-radius: 16px;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-upload-dragger:hover) {
+  border-color: #409eff;
+  background-color: #f0f7ff;
 }
 
 .uploaded-container {
@@ -663,7 +676,7 @@ const openOriginalImage = () => {
   height: 300px;
   position: relative;
   background-color: #f5f7fa;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
   border: 1px solid #e4e7ed;
 }
@@ -678,12 +691,18 @@ const openOriginalImage = () => {
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(0, 0, 0, 0.5);
-  padding: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  padding: 12px;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 15px;
+  transition: opacity 0.3s ease;
+}
+
+.image-preview-wrapper-large:hover .image-actions-overlay {
+  opacity: 1;
 }
 
 .card-header {
@@ -691,6 +710,7 @@ const openOriginalImage = () => {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 1.05rem;
 }
 
 .floor-group, .layout-group {
@@ -703,6 +723,7 @@ const openOriginalImage = () => {
   margin: 0 4px;
   color: #606266;
   font-size: 14px;
+  font-weight: 500;
 }
 
 :deep(.el-input-number.is-controls-right .el-input-number__decrease),
@@ -715,33 +736,77 @@ const openOriginalImage = () => {
   text-align: right;
 }
 
+.action-footer .el-button {
+  padding: 14px 36px;
+  font-size: 1.05rem;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.action-footer .el-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,123,255,0.3);
+}
+
 .cropper-wrapper {
   height: 400px;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.ml-10 {
-  margin-left: 10px;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+/* Weight Items */
 .weight-item {
   text-align: center;
-  padding: 5px;
+  padding: 8px 4px;
+  background: #fafbfc;
+  border-radius: 10px;
+  transition: all 0.2s ease;
 }
-.weight-item span {
+
+.weight-item:hover {
+  background: #f0f7ff;
+}
+
+.weight-item span:first-child {
   display: block;
   font-size: 12px;
   color: #606266;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
+  font-weight: 500;
 }
+
 .weight-value {
   display: inline-block;
-  margin-top: 5px;
-  font-size: 12px;
+  margin-top: 4px;
+  font-size: 13px;
   color: #409EFF;
-  font-weight: bold;
+  font-weight: 700;
+}
+
+/* Form enhancements */
+:deep(.el-form-item__label) {
+  font-weight: 600;
+  color: #303133;
+}
+
+:deep(.el-select .el-input__wrapper),
+:deep(.el-input-number .el-input__wrapper) {
+  border-radius: 8px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .upload-ocr-row {
+    flex-direction: column;
+  }
+  .step-title {
+    font-size: 1.4rem;
+  }
+  .image-preview-wrapper-large {
+    height: 220px;
+  }
+  .layout-group {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
 }
 </style>

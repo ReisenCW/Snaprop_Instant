@@ -1,33 +1,39 @@
 """
-本模块包含 通义千问管理 类
+本模块包含 DeepSeek 管理类（使用 OpenAI 兼容 API）
 """
-import dashscope
+from openai import OpenAI
 from llm.prompt import Prompt
 from config.qianwen_config import model_name, model_api_key
+
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 
 class QianwenManager():
     """
-    通义千问管理 类
+    LLM 管理类（通过 OpenAI 兼容 API 调用 DeepSeek）
     """
 
     def __init__(self):
         self._model = model_name
         self._api_key = model_api_key
+        self._client = OpenAI(
+            api_key=self._api_key,
+            base_url=DEEPSEEK_BASE_URL,
+        )
 
     def disconnect_llm(self):
         return
 
     def interact_qwen(self, prompt: str, request: str):
-        message = [{'role': 'system', 'content': prompt},
-                   {'role': 'user', 'content': request}]
-        reply = dashscope.Generation.call(
+        messages = [{'role': 'system', 'content': prompt}]
+        if request:
+            messages.append({'role': 'user', 'content': request})
+
+        reply = self._client.chat.completions.create(
             model=self._model,
-            api_key=self._api_key,
-            messages=message,
-            result_format='text'
+            messages=messages,
         )
-        return reply.output.text
+        return reply.choices[0].message.content
 
     def classify_message(self, message: str):
         return self.interact_qwen(prompt=Prompt.PROMPT_CLASSIFY_MESSAGE, request=message)

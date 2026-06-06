@@ -1,12 +1,12 @@
 import os
 class Config:
     # API配置
-    DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")  # 阿里云DashScope API密钥
+    DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")  # DeepSeek API密钥
     # 使用的模型
-    # MODEL = "qwen3-max"
-    MODEL = "qwen-max-latest"
-    WEB_MODEL = "qwen-plus-latest"
-    FAST_MODEL = "qwen-turbo-latest"
+    # MODEL = "deepseek-v4-pro"
+    MODEL = "deepseek-v4-pro"
+    WEB_MODEL = "deepseek-v4-flash"
+    FAST_MODEL = "deepseek-v4-flash"
     # 迭代与搜索配置
     MAX_ITERATIONS = 1  # 预测时的最大搜索迭代次数
     MAX_RETRIES = 4  # 预测错误时的最大重试次数
@@ -26,8 +26,8 @@ class Config:
     @classmethod
     def validate(cls):
         """验证配置是否完整"""
-        if not cls.DASHSCOPE_API_KEY:
-            raise ValueError("请设置环境变量DASHSCOPE_API_KEY（从阿里云DashScope获取）")
+        if not cls.DEEPSEEK_API_KEY:
+            raise ValueError("请设置环境变量DEEPSEEK_API_KEY（从 DeepSeek API 获取）")
         # 验证 HISTORY_MODE
         allowed = {'ENABLE_REFLECTION', 'ENABLE_BOTH', 'ENABLE_NONE'}
         if getattr(cls, 'HISTORY_MODE', None) not in allowed:

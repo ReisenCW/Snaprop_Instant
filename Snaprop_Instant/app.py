@@ -4,6 +4,11 @@ Web应用入口
 """
 import os
 import sys
+
+# Load .env from project root before any other imports
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
+
 import json
 import re
 import glob
@@ -97,6 +102,29 @@ def calculate_reference_time(comparable_cases, weights=None):
     months_to_now = max(1, days_to_now // 30)
     
     return reference_time, time_std_days, months_to_now
+
+
+def quick_predict_trend(query):
+    """
+    快速预测趋势 - 直接单次调用大模型，不走复杂Agent流程
+    用于答辩等需要快速响应的场景
+    """
+    from llm.llm_manager import QianwenManager
+
+    prompt = """你是一个专业的房产价格分析师。请根据用户的查询，直接给出房价趋势预测。
+
+要求：
+1. 直接给出预测结果，不要有多余的分析过程
+2. 必须包含趋势方向（上升/下降）和幅度百分比
+3. 参考上海二手房市场"高开低走"的历史特征
+
+请严格按照以下格式回答（每行一个标签）：
+趋势: [上升/下降/持平]
+幅度: [数值]%~[%](如：3%~5%)
+"""
+    manager = QianwenManager()
+    result = manager.interact_qwen(prompt, query)
+    return result
 
 
 def generate_prediction_query(region, reference_time, months_to_now, time_std_days):
@@ -249,7 +277,11 @@ def api_login():
                 "user": {
                     "id": user['id'],
                     "username": user['username'],
-                    "email": user['email']
+                    "email": user['email'],
+                    "avatar": user.get('avatar', ''),
+                    "nickname": user.get('nickname', ''),
+                    "signature": user.get('signature', ''),
+                    "phone": user.get('phone', '')
                 }
             })
         else:
@@ -311,6 +343,101 @@ def api_change_password():
             return jsonify({"success": False, "error": message}), 401
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- Profile APIs ---
+
+@app.route('/api/profile/<username>', methods=['GET'])
+def api_get_profile(username):
+    """获取用户个人资料"""
+    try:
+        mysql_manager = MySQLManager()
+        profile = mysql_manager.get_user_profile(username)
+        mysql_manager.close()
+        if profile:
+            return jsonify({"success": True, "profile": profile})
+        return jsonify({"success": False, "error": "用户不存在"}), 404
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/profile/update', methods=['POST'])
+def api_update_profile():
+    """更新用户个人资料（仅允许已存在的用户更新自己的资料）"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        if not username:
+            return jsonify({"success": False, "error": "缺少用户名"}), 400
+
+        mysql_manager = MySQLManager()
+
+        # Verify the target user exists before updating
+        existing = mysql_manager.find_user(username)
+        if not existing:
+            mysql_manager.close()
+            return jsonify({"success": False, "error": "用户不存在"}), 404
+
+        # Only allow updating safe profile fields (not password, not username)
+        safe_data = {k: v for k, v in data.items() if k in ('nickname', 'signature', 'phone', 'email')}
+        success, message = mysql_manager.update_profile(username, safe_data)
+        mysql_manager.close()
+        if success:
+            return jsonify({"success": True, "message": message})
+        return jsonify({"success": False, "error": message}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/profile/avatar', methods=['POST'])
+def api_upload_avatar():
+    """上传用户头像（需要提供有效的用户名）"""
+    username = request.form.get('username')
+    if not username:
+        return jsonify({'success': False, 'error': '缺少用户名'}), 400
+
+    # Verify user exists
+    mysql_manager = MySQLManager()
+    existing = mysql_manager.find_user(username)
+    if not existing:
+        mysql_manager.close()
+        return jsonify({'success': False, 'error': '用户不存在'}), 404
+
+    if 'file' not in request.files:
+        mysql_manager.close()
+        return jsonify({'success': False, 'error': '没有文件'})
+    file = request.files['file']
+    if file.filename == '':
+        mysql_manager.close()
+        return jsonify({'success': False, 'error': '文件名为空'})
+
+    if file and allowed_file(file.filename):
+        try:
+            # Validate file content is actually an image
+            header = file.read(8)
+            file.seek(0)
+            valid_headers = [b'\x89PNG\r\n', b'\xff\xd8\xff', b'GIF89a', b'GIF87a', b'RIFF']
+            if not any(header.startswith(h) for h in valid_headers):
+                mysql_manager.close()
+                return jsonify({'success': False, 'error': '文件内容不是有效的图片'}), 400
+
+            filename = secure_filename(file.filename)
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            new_filename = f"avatar_{timestamp}_{filename}"
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+            file.save(file_path)
+            avatar_url = f"/static/uploads/{new_filename}"
+
+            mysql_manager.update_avatar(username, avatar_url)
+            mysql_manager.close()
+
+            return jsonify({'success': True, 'url': avatar_url})
+        except Exception as e:
+            mysql_manager.close()
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    mysql_manager.close()
+    return jsonify({'success': False, 'error': '不支持的文件类型'})
 
 
 # --- Admin APIs ---
@@ -778,7 +905,8 @@ def api_valuation():
                 
                 query = generate_prediction_query(region, reference_time, months_to_now, time_std_days)
                 
-                prediction = predict_region(query, enable_evolution=False, debug=True)
+                # prediction = predict_region(query, enable_evolution=False, debug=True)  # 旧的慢速预测
+                prediction = quick_predict_trend(query)
                 if prediction:
                     min_t, max_t, _, _ = extract_trend_factor(prediction)
                     trend_factor = (min_t + max_t) / 2.0
@@ -1053,7 +1181,7 @@ def api_upload_cert():
                 2. 必须包含的字段：房产地址、城市、建筑面积、户型、建成年份、权利人、共有情况、登记日期。
                 3. 如果某项不存在，value 设为空字符串。
                 4. 只返回 JSON 代码块，不要有其他解释。"""
-                llm_reply = call_llm(model="qwen-turbo-latest", system_prompt=sys_prompt, prompt="OCR识别出的乱序文本：" + raw_text_content)
+                llm_reply = call_llm(model="deepseek-v4-flash", system_prompt=sys_prompt, prompt="OCR识别出的乱序文本：" + raw_text_content)
                 
                 # 提取 JSON 部分
                 json_match = re.search(r'\[.*\]', llm_reply, re.DOTALL)
@@ -1147,6 +1275,7 @@ def api_generate_report_content():
 if __name__ == '__main__':
     db = MySQLManager()
     db.init_all_tables()
+    db.alter_users_table()  # 一次性迁移：为新版本添加 profile 字段
     db.close()
-    
+
     app.run(debug=False, host='0.0.0.0', port=5000) 

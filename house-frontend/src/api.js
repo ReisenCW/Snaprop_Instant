@@ -30,4 +30,22 @@ export const exportExcel = (tableData) => {
   return apiClient.post('/api/export_excel', { table_data: tableData }, { responseType: 'blob' })
 }
 
+// Profile APIs
+export const getProfile = (username) => {
+  return apiClient.get(`/api/profile/${username}`)
+}
+
+export const updateProfile = (data) => {
+  return apiClient.post('/api/profile/update', data)
+}
+
+export const uploadAvatar = (file, username) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('username', username)
+  return apiClient.post('/api/profile/avatar', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
 export default apiClient

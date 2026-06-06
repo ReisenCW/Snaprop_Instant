@@ -25,7 +25,11 @@ const activeStep = computed(() => {
 
     <!-- Main Step Content -->
     <div class="step-view-container">
-      <router-view :key="$route.fullPath" />
+      <router-view v-slot="{ Component, route }">
+        <transition name="fade-slide" mode="out-in">
+          <component :is="Component" :key="route.fullPath" />
+        </transition>
+      </router-view>
     </div>
   </div>
 </template>

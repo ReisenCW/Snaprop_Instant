@@ -23,12 +23,7 @@ const prevStep = () => {
 }
 
 const startAnalysis = async () => {
-  if (fileList.value.length === 0) {
-    ElMessage.warning('请上传一张房产外观或环境图片以继续')
-    return
-  }
-  
-  // 组装数据调用后端
+  // 组装数据调用后端（照片可选）
   const valuationData = {
     address: houseInfo.address,
     city: houseInfo.city,
@@ -122,7 +117,7 @@ const handlePictureCardPreview = (file) => {
     <!-- Header Section -->
     <div class="header-section">
       <h2 class="step-title">步骤 2: 上传房产外观环境照片</h2>
-      <p class="step-description">提供房产的外观图片、周边配套或室内实拍图。丰富的视觉资料将通过多模态模型显著提高估值的准确度。</p>
+      <p class="step-description">提供房产的外观图片、周边配套或室内实拍图（可选）。丰富的视觉资料将通过多模态模型显著提高估值的准确度。</p>
     </div>
 
     <!-- Upload Card -->
@@ -133,7 +128,7 @@ const handlePictureCardPreview = (file) => {
         v-model:file-list="fileList"
         :auto-upload="false"
         :on-remove="handleRemove"
-        :on-change="(file) => { if(file.status === 'ready') handleBeforeUpload(file.raw) }"
+        :on-change="(uploadFile) => { if (uploadFile && uploadFile.raw) handleBeforeUpload(uploadFile.raw) }"
         accept=".png,.jpg,.jpeg"
         class="multi-photo-uploader"
       >
@@ -171,6 +166,7 @@ const handlePictureCardPreview = (file) => {
           <el-link :href="file.url" target="_blank" type="primary">已提供图片 {{ index + 1 }}: {{ file.name }}</el-link>
         </div>
       </div>
+      <p class="upload-hint-optional">* 照片为可选项，不上传也可直接开始估值</p>
     </el-card>
 
     <el-dialog v-model="dialogVisible">
@@ -184,7 +180,7 @@ const handlePictureCardPreview = (file) => {
       </el-button>
 
       <!-- LLM Prediction Toggle (Placed in middle) -->
-      <!-- <div class="llm-toggle-footer">
+      <div class="llm-toggle-footer">
         <el-icon class="magic-icon"><magic-stick /></el-icon>
         <span class="toggle-text">大模型预测微调</span>
         <el-switch
@@ -196,7 +192,7 @@ const handlePictureCardPreview = (file) => {
         <el-tooltip content="开启后将结合最新市场趋势数据通过大模型进行价格修正" placement="top">
           <el-icon class="info-icon"><info-filled /></el-icon>
         </el-tooltip>
-      </div> -->
+      </div>
 
       <el-button type="success" size="large" @click="startAnalysis" :icon="Promotion" round shadow>
         开始估值分析
@@ -209,7 +205,12 @@ const handlePictureCardPreview = (file) => {
 .step-two-container {
   max-width: 900px;
   margin: 0 auto;
-  animation: fadeIn 0.5s ease-out;
+  animation: fadeSlideIn 0.5s ease-out;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .header-section {
@@ -220,7 +221,8 @@ const handlePictureCardPreview = (file) => {
 .step-title {
   font-size: 2rem;
   color: #2c3e50;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
+  font-weight: 700;
 }
 
 .step-description {
@@ -228,16 +230,24 @@ const handlePictureCardPreview = (file) => {
   font-size: 1.1rem;
   max-width: 700px;
   margin: 0 auto;
+  line-height: 1.7;
 }
 
 .upload-container-card {
   border-radius: 20px;
-  padding: 40px 20px;
+  padding: 50px 20px;
   text-align: center;
-  border: 1px dashed #dcdfe6;
-  background-color: #fafafa;
+  border: 2px dashed #d0d7de;
+  background: linear-gradient(135deg, #fafbfc 0%, #f0f4f8 100%);
   display: flex;
   justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.upload-container-card:hover {
+  border-color: #409eff;
+  background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%);
+  box-shadow: 0 4px 20px rgba(64,158,255,0.08);
 }
 
 .multi-photo-uploader :deep(.el-upload-list) {
@@ -255,14 +265,16 @@ const handlePictureCardPreview = (file) => {
 }
 
 .file-link-item {
-  padding: 8px 12px;
+  padding: 10px 16px;
   background: #fff;
-  border-radius: 6px;
+  border-radius: 10px;
   border: 1px solid #ebeef5;
+  transition: all 0.2s ease;
 }
 
-.cropper-wrapper {
-  height: 450px;
+.file-link-item:hover {
+  border-color: #409eff;
+  box-shadow: 0 2px 8px rgba(64,158,255,0.1);
 }
 
 :deep(.el-upload-dragger) {
@@ -276,12 +288,23 @@ const handlePictureCardPreview = (file) => {
   height: 300px;
   border: none;
   background: transparent;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+:deep(.el-upload--picture-card .el-upload-list__item) {
+  border-radius: 12px;
 }
 
 .camera-icon {
-  font-size: 4rem;
+  font-size: 4.5rem;
   color: #409eff;
   margin-bottom: 20px;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.upload-container-card:hover .camera-icon {
+  transform: scale(1.15) translateY(-4px);
 }
 
 .el-upload-list__item-thumbnail-wrapper {
@@ -300,6 +323,7 @@ const handlePictureCardPreview = (file) => {
   font-size: 1.2rem;
   color: #606266;
   font-weight: 500;
+  margin-bottom: 4px;
 }
 
 .upload-tip {
@@ -307,25 +331,65 @@ const handlePictureCardPreview = (file) => {
   font-size: 0.9rem;
 }
 
-.upload-gallery-info {
-  margin-top: 30px;
-  color: #67c23a;
-  font-weight: 600;
+/* Uploaded photo card styling */
+:deep(.el-upload-list__item) {
+  border-radius: 14px !important;
+  overflow: hidden;
+  border: 2px solid #e4e7ed !important;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-upload-list__item:hover) {
+  border-color: #409eff !important;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.15);
+}
+
+:deep(.el-upload-list__item-thumbnail) {
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+:deep(.el-upload-list__item-actions) {
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+:deep(.el-upload-list__item:hover .el-upload-list__item-actions) {
+  opacity: 1;
+}
+
+:deep(.el-upload-list__item-actions span) {
+  transition: transform 0.2s ease;
+}
+
+:deep(.el-upload-list__item-actions span:hover) {
+  transform: scale(1.2);
+}
+
+.upload-hint-optional {
+  color: #909399;
+  font-size: 0.85rem;
+  margin-top: 12px;
+  font-style: italic;
 }
 
 .llm-toggle-footer {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #f0f7ff;
-  padding: 8px 20px;
-  border-radius: 30px;
+  background: linear-gradient(135deg, #f0f7ff, #faf5ff);
+  padding: 10px 24px;
+  border-radius: 40px;
   border: 1px solid #d9ecff;
+  box-shadow: 0 2px 8px rgba(64,158,255,0.06);
 }
 
 .toggle-text {
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 600;
   color: #606266;
 }
 
@@ -338,6 +402,11 @@ const handlePictureCardPreview = (file) => {
   color: #909399;
   cursor: help;
   font-size: 0.9rem;
+  transition: color 0.2s;
+}
+
+.info-icon:hover {
+  color: #409eff;
 }
 
 .navigation-footer {
@@ -345,10 +414,35 @@ const handlePictureCardPreview = (file) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
+.navigation-footer .el-button {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.navigation-footer .el-button:hover {
+  transform: translateY(-2px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .step-title {
+    font-size: 1.5rem;
+  }
+  .upload-container-card {
+    padding: 30px 16px;
+  }
+  .navigation-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .llm-toggle-footer {
+    justify-content: center;
+  }
+  .camera-icon {
+    font-size: 3rem;
+  }
 }
 </style>

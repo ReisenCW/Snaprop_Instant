@@ -396,7 +396,7 @@ class MySQLManager():
     def find_user(self, username_or_email):
         """查找用户"""
         try:
-            query = "SELECT id, username, email, password FROM users WHERE username=%s OR email=%s"
+            query = "SELECT id, username, email, password, avatar, nickname, signature, phone FROM users WHERE username=%s OR email=%s"
             self._cursor.execute(query, (username_or_email, username_or_email))
             result = self._cursor.fetchone()
             if result:
@@ -404,10 +404,28 @@ class MySQLManager():
                     "id": result[0],
                     "username": result[1],
                     "email": result[2],
-                    "password": result[3]
+                    "password": result[3],
+                    "avatar": result[4] or "",
+                    "nickname": result[5] or "",
+                    "signature": result[6] or "",
+                    "phone": result[7] or ""
                 }
             return None
         except mysql.connector.Error as err:
+            # 兼容旧表（可能没有新字段）
+            try:
+                query = "SELECT id, username, email, password FROM users WHERE username=%s OR email=%s"
+                self._cursor.execute(query, (username_or_email, username_or_email))
+                result = self._cursor.fetchone()
+                if result:
+                    return {
+                        "id": result[0], "username": result[1],
+                        "email": result[2], "password": result[3],
+                        "avatar": "", "nickname": "", "signature": "", "phone": ""
+                    }
+                return None
+            except:
+                pass
             print(f"查找用户失败: {err}")
             return None
 
@@ -439,6 +457,97 @@ class MySQLManager():
         except mysql.connector.Error as err:
             print(f"更新密码失败: {err}")
             return False, str(err)
+
+    def alter_users_table(self):
+        """迁移：为 users 表新增头像、昵称、签名、手机号字段（幂等）"""
+        migrations = [
+            ("ALTER TABLE users ADD COLUMN avatar VARCHAR(500) DEFAULT ''", "avatar"),
+            ("ALTER TABLE users ADD COLUMN nickname VARCHAR(50) DEFAULT ''", "nickname"),
+            ("ALTER TABLE users ADD COLUMN signature VARCHAR(200) DEFAULT ''", "signature"),
+            ("ALTER TABLE users ADD COLUMN phone VARCHAR(20) DEFAULT ''", "phone"),
+        ]
+        for sql, col_name in migrations:
+            try:
+                self._cursor.execute(sql)
+                self._connection.commit()
+                print(f"✅ 已添加字段: {col_name}")
+            except mysql.connector.Error as err:
+                if err.errno == 1060:  # Duplicate column
+                    print(f"⏭️ 字段已存在: {col_name}")
+                else:
+                    print(f"❌ 添加字段 {col_name} 失败: {err}")
+
+    def update_profile(self, username, data):
+        """更新用户资料：nickname, signature, phone, email"""
+        allowed = ['nickname', 'signature', 'phone', 'email']
+        updates = []
+        values = []
+        for key in allowed:
+            if key in data and data[key] is not None:
+                updates.append(f"{key}=%s")
+                values.append(data[key])
+        if not updates:
+            return False, "没有需要更新的字段"
+        values.append(username)
+        try:
+            query = f"UPDATE users SET {', '.join(updates)} WHERE username=%s"
+            self._cursor.execute(query, values)
+            self._connection.commit()
+            return True, "资料更新成功"
+        except mysql.connector.Error as err:
+            print(f"更新资料失败: {err}")
+            return False, str(err)
+
+    def update_avatar(self, username, avatar_url):
+        """更新用户头像 URL"""
+        try:
+            self._cursor.execute(
+                "UPDATE users SET avatar=%s WHERE username=%s",
+                (avatar_url, username)
+            )
+            self._connection.commit()
+            return True
+        except mysql.connector.Error as err:
+            print(f"更新头像失败: {err}")
+            return False
+
+    def get_user_profile(self, username):
+        """获取用户完整资料（含统计）"""
+        user = self.find_user(username)
+        if not user:
+            return None
+        # 重新查询获取新增字段
+        try:
+            query = "SELECT id, username, email, password, avatar, nickname, signature, phone, created_at FROM users WHERE username=%s"
+            self._cursor.execute(query, (username,))
+            row = self._cursor.fetchone()
+            if not row:
+                return None
+            profile = {
+                "id": row[0], "username": row[1], "email": row[2],
+                "avatar": row[4] or "", "nickname": row[5] or "",
+                "signature": row[6] or "", "phone": row[7] or "",
+                "created_at": row[8].strftime('%Y-%m-%d') if row[8] else ""
+            }
+            # 统计
+            stats = self.get_user_stats(username)
+            profile["stats"] = stats
+            return profile
+        except mysql.connector.Error as err:
+            print(f"获取用户资料失败: {err}")
+            return None
+
+    def get_user_stats(self, username):
+        """获取用户统计：估值次数、报告数量"""
+        try:
+            self._cursor.execute(
+                "SELECT COUNT(*) FROM user_reports WHERE username=%s", (username,)
+            )
+            report_count = self._cursor.fetchone()[0]
+            return {"report_count": report_count}
+        except mysql.connector.Error as err:
+            print(f"获取用户统计失败: {err}")
+            return {"report_count": 0}
 
     def init_reports_table(self):
         """初始化用户报告关联表"""

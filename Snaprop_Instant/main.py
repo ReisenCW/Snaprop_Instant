@@ -26,8 +26,22 @@ except ImportError as e:
     sys.exit(1)
 
 def get_base64_image(image_path):
-    """将图片文件转换为 Base64 字符串"""
-    if not image_path or not os.path.exists(image_path):
+    """将图片文件路径或 Base64 数据 URL 标准化为 Base64 字符串。
+
+    支持：
+    - 本地文件路径 → 读取并转换为 Base64
+    - 已经是 data:image/...;base64,... 格式 → 直接返回
+    - None / 空 → 返回 None
+    """
+    if not image_path:
+        return None
+
+    # 如果已经是 base64 data URL，直接返回
+    if isinstance(image_path, str) and image_path.startswith('data:image/'):
+        return image_path
+
+    # 尝试作为本地文件路径读取
+    if not os.path.exists(image_path):
         return None
     try:
         ext = os.path.splitext(image_path)[1].lower().replace('.', '')
@@ -213,6 +227,16 @@ class PropertyValuationSystem:
         # 转换并存储图片的 Base64 数据，以便在删除本地文件后仍能查看报告
         cert_img_b64 = get_base64_image(property_data.get('property_cert_image'))
         photo_img_b64 = get_base64_image(property_data.get('property_photo'))
+
+        # 处理 property_photos 列表（前端传来的 base64 图片列表）
+        property_photos_b64 = []
+        raw_photos = property_data.get('property_photos', [])
+        if raw_photos and isinstance(raw_photos, list):
+            for p in raw_photos:
+                b64 = get_base64_image(p)
+                if b64:
+                    property_photos_b64.append(b64)
+
         map_img_b64 = None
         # 如果 property_data 本身包含 map_image 或从处理后的原始数据中提取
         map_path = property_data.get('map_image') # 可能由 api 填充
@@ -231,6 +255,7 @@ class PropertyValuationSystem:
             "embedded_images": {
                 "cert_image": cert_img_b64,
                 "photo_image": photo_img_b64,
+                "property_photos": property_photos_b64,
                 "map_image": map_img_b64
             }
         }

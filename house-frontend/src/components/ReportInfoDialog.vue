@@ -107,11 +107,11 @@ const autoFill = async () => {
 
 const handleAvatarSuccess = (response) => {
   // 假设后端返回 { success: true, url: '/static/uploads/...' }
-  if (response.success || response.url) {
-    formData.reportLogo = response.url // 修复：后端可能直接返回 {url: ...} 或者 {success:true, url: ...}
+  if (response && response.url) {
+    formData.reportLogo = response.url
     ElMessage.success('Logo 上传成功')
   } else {
-    ElMessage.error(response.error || '上传失败')
+    ElMessage.error((response && response.error) || '上传失败')
   }
 }
 
@@ -226,31 +226,64 @@ const beforeAvatarUpload = (rawFile) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 20px 0 10px;
-  border-bottom: 1px solid #ebeef5;
-  padding-bottom: 5px;
+  margin: 24px 0 14px;
+  border-bottom: 2px solid #ecf5ff;
+  padding-bottom: 8px;
 }
 .divider span {
-  font-weight: bold;
-  font-size: 14px;
-  color: #606266;
+  font-weight: 700;
+  font-size: 15px;
+  color: #303133;
 }
 
 .logo-upload-container {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  align-items: center;
 }
 
 .logo-preview {
   margin-top: 10px;
-  border: 1px solid #dcdfe6;
-  padding: 4px;
-  border-radius: 4px;
+  border: 1px solid #e4e7ed;
+  padding: 6px;
+  border-radius: 8px;
   display: inline-block;
+  background: #fafbfc;
 }
 .logo-preview img {
-  max-height: 60px;
-  max-width: 200px;
+  max-height: 64px;
+  max-width: 220px;
   object-fit: contain;
+  border-radius: 4px;
+}
+
+:deep(.el-dialog) {
+  border-radius: 16px;
+}
+
+:deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #f8fafc, #f0f4f8);
+  border-radius: 16px 16px 0 0;
+  padding: 20px 24px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+:deep(.el-dialog__title) {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+:deep(.el-dialog__body) {
+  padding: 24px;
+}
+
+:deep(.el-textarea__inner) {
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-textarea__inner:focus) {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64,158,255,0.15);
 }
 </style>

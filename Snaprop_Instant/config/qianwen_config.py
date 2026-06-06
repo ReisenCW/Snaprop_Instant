@@ -1,4 +1,4 @@
 import os
-# 通义千问配置
-model_name = "qwen-plus-latest"
-model_api_key = os.getenv("DASHSCOPE_API_KEY")
+# DeepSeek 配置
+model_name = "deepseek-v4-flash"
+model_api_key = os.getenv("DEEPSEEK_API_KEY")

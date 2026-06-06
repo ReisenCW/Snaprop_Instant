@@ -1,18 +1,28 @@
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { houseStore } from './store'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import axios from 'axios'
+import { ArrowUp } from '@element-plus/icons-vue'
 import { API_BASE_URL } from './config'
 
 const router = useRouter()
 
-const changePasswordDialogVisible = ref(false)
-const passwordForm = reactive({
-  oldPassword: '',
-  newPassword: '',
-  confirmPassword: ''
+const showBackToTop = ref(false)
+
+const handleScroll = () => {
+  showBackToTop.value = window.scrollY > 400
+}
+
+const scrollToTop = () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', handleScroll)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
 })
 
 const handleLogout = () => {
@@ -20,37 +30,11 @@ const handleLogout = () => {
   router.push('/')
 }
 
-const showChangePassword = () => {
-  changePasswordDialogVisible.value = true
-}
-
-const handleChangePassword = async () => {
-  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-    ElMessage.error('两次输入的新密码不一致')
-    return
-  }
-  
-  try {
-    const response = await axios.post(`${API_BASE_URL}/api/change_password`, {
-      username: houseStore.user.username,
-      old_password: passwordForm.oldPassword,
-      new_password: passwordForm.newPassword
-    })
-    
-    if (response.data.success) {
-      ElMessage.success('密码修改成功')
-      changePasswordDialogVisible.value = false
-      // 重置表单
-      passwordForm.oldPassword = ''
-      passwordForm.newPassword = ''
-      passwordForm.confirmPassword = ''
-    } else {
-      ElMessage.error(response.data.error || '修改密码失败')
-    }
-  } catch (error) {
-    ElMessage.error(error.response?.data?.error || '请求失败')
-  }
-}
+const userAvatarSrc = computed(() => {
+  const av = houseStore.user?.avatar
+  if (!av) return ''
+  return av.startsWith('http') ? av : `${API_BASE_URL}${av}`
+})
 </script>
 
 <template>
@@ -87,14 +71,22 @@ const handleChangePassword = async () => {
           <template v-if="houseStore.isAuthenticated">
             <el-dropdown trigger="hover">
               <span class="user-info">
-                <el-avatar :size="32" icon="User" />
-                <span class="username">{{ houseStore.user?.username }}</span>
+                <el-avatar :size="34" :src="userAvatarSrc" class="nav-avatar">
+                  <el-icon :size="20"><User /></el-icon>
+                </el-avatar>
+                <span class="username">{{ houseStore.user?.nickname || houseStore.user?.username }}</span>
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item v-if="houseStore.user?.username === 'admin'" @click="$router.push('/admin')">系统管理</el-dropdown-item>
-                  <el-dropdown-item @click="showChangePassword">修改密码</el-dropdown-item>
-                  <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
+                  <el-dropdown-item v-if="houseStore.user?.username === 'admin'" @click="$router.push('/admin')">
+                    <el-icon><Setting /></el-icon> 系统管理
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="$router.push('/profile')">
+                    <el-icon><User /></el-icon> 个人中心
+                  </el-dropdown-item>
+                  <el-dropdown-item divided @click="handleLogout">
+                    <el-icon><SwitchButton /></el-icon> 退出登录
+                  </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -105,39 +97,30 @@ const handleChangePassword = async () => {
         </div>
       </el-menu>
 
-      <!-- 修改密码对话框 -->
-      <el-dialog
-        v-model="changePasswordDialogVisible"
-        title="修改密码"
-        width="400px"
-        center
-        destroy-on-close
-      >
-        <el-form label-position="top">
-          <el-form-item label="当前密码">
-            <el-input v-model="passwordForm.oldPassword" type="password" show-password />
-          </el-form-item>
-          <el-form-item label="新密码">
-            <el-input v-model="passwordForm.newPassword" type="password" show-password />
-          </el-form-item>
-          <el-form-item label="确认新密码">
-            <el-input v-model="passwordForm.confirmPassword" type="password" show-password />
-          </el-form-item>
-        </el-form>
-        <template #footer>
-          <span class="dialog-footer">
-            <el-button @click="changePasswordDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="handleChangePassword">确定</el-button>
-          </span>
-        </template>
-      </el-dialog>
-
       <main class="main-content">
-        <router-view />
+        <router-view v-slot="{ Component, route }">
+          <transition name="page-fade" mode="out-in">
+            <component :is="Component" :key="route.fullPath" />
+          </transition>
+        </router-view>
       </main>
-      
+
+      <!-- Back to Top Button -->
+      <transition name="fade">
+        <div v-show="showBackToTop" class="back-to-top" @click="scrollToTop">
+          <el-icon :size="22"><ArrowUp /></el-icon>
+        </div>
+      </transition>
+
       <footer class="app-footer">
-        <p>© 2026 房估宝 - 智能房产估值新范式</p>
+        <div class="footer-content">
+          <div class="footer-brand">
+            <span class="footer-logo-text">房估宝</span>
+            <span class="footer-divider">|</span>
+            <span class="footer-desc">智能房产估值新范式</span>
+          </div>
+          <p class="footer-copy">© 2026 房估宝 - 基于多模态融合与大语言模型的智能房产估值系统</p>
+        </div>
       </footer>
     </div>
   </el-config-provider>
@@ -146,6 +129,7 @@ const handleChangePassword = async () => {
 <style>
 :root {
   --el-color-primary: #007bff;
+  --app-gradient: linear-gradient(135deg, #007bff 0%, #6610f2 100%);
 }
 
 body {
@@ -153,7 +137,23 @@ body {
   padding: 0;
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background-color: #f5f7fa;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f0f2f5;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
 }
 
 .app-layout {
@@ -165,50 +165,61 @@ body {
 .header-menu {
   padding: 0 40px;
   border-bottom: none !important;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
   position: sticky;
   top: 0;
   z-index: 1000;
+  background: linear-gradient(to bottom, #ffffff, #fefefe) !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* Subtle gradient accent line at header bottom */
+.header-menu::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #007bff, #6610f2, #e83e8c);
+  opacity: 0.6;
 }
 
 .logo-container {
   display: flex;
   align-items: center;
   margin-right: 40px;
-  margin-top: 5px; /* 下移一点 */
+  margin-top: 5px;
+  flex-shrink: 0;
 }
 
 .logo-image {
-  height: 54px; /* 稍微缩小一点防止撑开 header */
+  height: 54px;
   width: auto;
   margin-right: 12px;
+  transition: transform 0.3s ease;
+}
+
+.logo-image:hover {
+  transform: rotate(-5deg) scale(1.05);
 }
 
 .logo-text {
-  color: #303133;
+  background: linear-gradient(135deg, #007bff, #6610f2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   font-size: 1.5rem;
   font-weight: 900;
   letter-spacing: 2px;
 }
 
-.main-content {
-  flex: 1;
-}
-
-.app-footer {
-  text-align: center;
-  padding: 30px 0;
-  background-color: #ffffff;
-  color: #909399;
-  border-top: 1px solid #ebeef5;
-  font-size: 0.9rem;
-}
-
 .header-right {
-  margin-left: auto;
+  margin-left: auto !important;
   display: flex;
   align-items: center;
-  padding-right: 20px;
+  flex-shrink: 0;
 }
 
 .user-info {
@@ -217,6 +228,16 @@ body {
   gap: 10px;
   cursor: pointer;
   outline: none;
+}
+
+.nav-avatar {
+  flex-shrink: 0;
+  border: 2px solid #e4e7ed;
+  transition: border-color 0.3s ease;
+}
+
+.user-info:hover .nav-avatar {
+  border-color: #409eff;
 }
 
 .username {
@@ -229,29 +250,130 @@ body {
   font-weight: 600;
 }
 
+.main-content {
+  flex: 1;
+  min-height: calc(100vh - 140px);
+}
+
+/* Page Transition */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: all 0.3s ease;
+}
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+/* Back to Top Button */
+.back-to-top {
+  position: fixed;
+  bottom: 40px;
+  right: 40px;
+  width: 48px;
+  height: 48px;
+  background: var(--app-gradient);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 999;
+  box-shadow: 0 4px 16px rgba(0, 123, 255, 0.35);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.back-to-top:hover {
+  transform: translateY(-4px) scale(1.08);
+  box-shadow: 0 6px 24px rgba(0, 123, 255, 0.5);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* Footer */
+.app-footer {
+  background: linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%);
+  border-top: 1px solid #ebeef5;
+  padding: 36px 0;
+}
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.footer-logo-text {
+  font-size: 1.2rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #007bff, #6610f2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.footer-divider {
+  color: #dcdfe6;
+}
+
+.footer-desc {
+  color: #606266;
+  font-size: 0.95rem;
+}
+
+.footer-copy {
+  color: #909399;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
 /* 导航栏 Tab 样式优化 */
 .header-menu .el-menu-item {
   height: 40px !important;
   line-height: 40px !important;
   margin: 10px 8px !important;
   border-radius: 8px !important;
-  background-color: transparent !important; /* 任何状态下背景透明 */
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important; /* 增加回弹感的过渡动画 */
+  background-color: transparent !important;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
   border-bottom: none !important;
+  font-weight: 500;
+  flex-grow: 0 !important;
 }
 
-/* 悬停动画：上移、变色，且非激活状态下才放大 */
+/* 悬停动画 */
 .header-menu .el-menu-item:hover {
   background-color: transparent !important;
   color: #409eff !important;
   transform: translateY(-2px) scale(1.2);
 }
 
-/* 选中/激活状态：背景透明，颜色加深，并持久保持放大和上移状态 */
+/* 选中/激活状态 */
 .header-menu .el-menu-item.is-active {
   background-color: transparent !important;
-  color: #0056b3 !important; /* 更深的蓝色 */
-  transform: translateY(-2px) scale(1.2) !important; /* 持久保持放大和位置 */
+  color: #0056b3 !important;
+  transform: translateY(-2px) scale(1.2) !important;
   border-bottom: none !important;
 }
 
@@ -262,5 +384,26 @@ body {
 
 .el-menu--horizontal > .el-menu-item.is-active {
   border-bottom: none !important;
+}
+
+/* Override Element Plus internal flex so items stay compact */
+.header-menu > li {
+  flex-grow: 0 !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .header-menu {
+    padding: 0 16px;
+  }
+  .logo-text {
+    display: none;
+  }
+  .back-to-top {
+    bottom: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+  }
 }
 </style>

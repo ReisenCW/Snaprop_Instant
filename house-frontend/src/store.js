@@ -1,5 +1,7 @@
 import { reactive } from 'vue'
 
+const stored = JSON.parse(localStorage.getItem('user')) || {}
+
 export const houseStore = reactive({
   // Step 1: Basic Info
   address: '',
@@ -14,21 +16,45 @@ export const houseStore = reactive({
   decoration: '精装',
   floor: '中',
   direction: '南',
-  year: '',
+  year: null,
   enablePrediction: false, // 是否开启大语言模型预测微调
   selectionWeights: null, // 专家权重
   valuationData: null,
   cert_image: '',
 
   // Auth state
-  user: JSON.parse(localStorage.getItem('user')) || null,
-  isAuthenticated: !!localStorage.getItem('user'),
+  user: stored.username ? {
+    id: stored.id || null,
+    username: stored.username || null,
+    email: stored.email || '',
+    avatar: stored.avatar || '',
+    nickname: stored.nickname || '',
+    signature: stored.signature || '',
+    phone: stored.phone || ''
+  } : null,
+  isAuthenticated: !!stored.username,
 
   // Login action
-  async login(userData) {
-    this.user = userData
+  login(userData) {
+    this.user = {
+      id: userData.id || null,
+      username: userData.username,
+      email: userData.email || '',
+      avatar: userData.avatar || '',
+      nickname: userData.nickname || '',
+      signature: userData.signature || '',
+      phone: userData.phone || ''
+    }
     this.isAuthenticated = true
-    localStorage.setItem('user', JSON.stringify(userData))
+    localStorage.setItem('user', JSON.stringify(this.user))
+  },
+
+  // Update profile (partial)
+  updateProfile(data) {
+    if (this.user) {
+      Object.assign(this.user, data)
+      localStorage.setItem('user', JSON.stringify(this.user))
+    }
   },
 
   // Logout action
@@ -52,7 +78,7 @@ export const houseStore = reactive({
     this.decoration = '精装'
     this.floor = '中'
     this.direction = '南'
-    this.year = ''
+    this.year = null
     this.enablePrediction = false
     this.selectionWeights = null
     this.valuationData = null

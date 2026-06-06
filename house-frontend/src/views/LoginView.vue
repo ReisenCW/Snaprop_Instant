@@ -141,29 +141,76 @@ const handleSubmit = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: linear-gradient(135deg, #f5f7fa 0%, #d4dce8 50%, #c3cfe2 100%);
   padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Background decorations */
+.login-container::before {
+  content: '';
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(0,123,255,0.08) 0%, transparent 70%);
+  top: -100px;
+  right: -100px;
+  border-radius: 50%;
+}
+
+.login-container::after {
+  content: '';
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(102,16,242,0.06) 0%, transparent 70%);
+  bottom: -60px;
+  left: -60px;
+  border-radius: 50%;
 }
 
 .login-box {
   width: 100%;
-  max-width: 440px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  padding: 40px;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  max-width: 460px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  padding: 48px 44px;
+  border-radius: 24px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  position: relative;
+  z-index: 1;
+  animation: cardReveal 0.6s ease-out;
+}
+
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(30px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.login-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #007bff, #6610f2, #e83e8c);
+  border-radius: 24px 24px 0 0;
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 32px;
 }
 
 .login-header h2 {
   font-size: 28px;
-  color: #2c3e50;
+  background: linear-gradient(135deg, #007bff, #6610f2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin-bottom: 10px;
   font-weight: 700;
 }
@@ -179,12 +226,19 @@ const handleSubmit = async () => {
 
 .submit-btn {
   width: 100%;
-  height: 48px;
+  height: 50px;
   font-size: 16px;
   font-weight: 600;
-  border-radius: 8px;
-  margin-top: 20px;
-  transition: transform 0.2s;
+  border-radius: 12px;
+  margin-top: 24px;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: linear-gradient(135deg, #007bff, #6610f2);
+  border: none;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,123,255,0.35);
 }
 
 .submit-btn:active {
@@ -192,24 +246,34 @@ const handleSubmit = async () => {
 }
 
 .login-footer {
-  margin-top: 24px;
+  margin-top: 28px;
   text-align: center;
   color: #7f8c8d;
   font-size: 14px;
 }
 
 :deep(.el-input__wrapper) {
-  padding: 10px 15px;
-  border-radius: 8px;
-  box-shadow: 0 0 0 1px #dcdfe6 inset;
+  padding: 12px 16px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px #e4e7ed inset;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #c0c4cc inset;
 }
 
 :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px #409eff inset;
+  box-shadow: 0 0 0 2px #409eff inset;
 }
 
 :deep(.el-form-item__label) {
-  font-weight: 500;
+  font-weight: 600;
   color: #34495e;
+  font-size: 14px;
+}
+
+:deep(.el-input__prefix-inner) {
+  color: #909399;
 }
 </style>

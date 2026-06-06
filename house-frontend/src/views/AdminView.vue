@@ -112,19 +112,33 @@ const handleDeleteReport = (reportId) => {
   })
 }
 
+const openPdf = (pdfUrl) => {
+  if (pdfUrl) {
+    const url = pdfUrl.startsWith('http') ? pdfUrl : `${API_BASE_URL}${pdfUrl}`
+    window.open(url, '_blank')
+  }
+}
+
 // --- Data Management ---
-const handleExcelUpload = (file) => {
+const handleExcelUpload = async (file) => {
+  if (!file || !file.raw) {
+    ElMessage.warning('请选择有效的 Excel 文件')
+    return
+  }
   const formData = new FormData()
   formData.append('file', file.raw)
   formData.append('city', manualForm.city)
 
   uploadLoading.value = true
-  axios.post(`${API_BASE_URL}/api/admin/upload_excel`, formData)
-    .then(res => {
-      if (res.data.success) ElMessage.success(res.data.message)
-    })
-    .catch(() => ElMessage.error('上传失败'))
-    .finally(() => uploadLoading.value = false)
+  try {
+    const res = await axios.post(`${API_BASE_URL}/api/admin/upload_excel`, formData)
+    if (res.data.success) ElMessage.success(res.data.message || '上传成功')
+    else ElMessage.error(res.data.error || '上传失败')
+  } catch (err) {
+    ElMessage.error(err.response?.data?.error || '上传失败，请检查网络或文件格式')
+  } finally {
+    uploadLoading.value = false
+  }
 }
 
 const submitManualEntry = async () => {
@@ -201,7 +215,7 @@ onMounted(() => {
             <el-table-column prop="generated_at" label="生成时间" width="180" />
             <el-table-column label="操作" width="150" align="center">
               <template #default="scope">
-                <el-button type="primary" size="small" @click="window.open(`${API_BASE_URL}${scope.row.pdf_url}`, '_blank')" v-if="scope.row.pdf_url">查看PDF</el-button>
+                <el-button type="primary" size="small" @click="openPdf(scope.row.pdf_url)" v-if="scope.row.pdf_url">查看PDF</el-button>
                 <el-button type="danger" :icon="Delete" circle @click="handleDeleteReport(scope.row.report_id)" />
               </template>
             </el-table-column>
@@ -396,27 +410,20 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Keep existing styles, add some new ones */
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.data-section h3 {
-  margin-bottom: 0;
-}
-</style>
-
-<style scoped>
 .admin-container {
   padding: 40px;
-  background-color: #f5f7fa;
+  background-color: #f0f2f5;
   min-height: 100vh;
+  animation: fadeSlideIn 0.45s ease-out;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .admin-header {
-  margin-bottom: 30px;
+  margin-bottom: 32px;
   text-align: center;
 }
 
@@ -424,7 +431,7 @@ onMounted(() => {
   font-size: 2.2rem;
   font-weight: 700;
   color: #303133;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .admin-subtitle {
@@ -433,14 +440,47 @@ onMounted(() => {
 }
 
 .admin-card {
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
+
+.admin-card :deep(.el-tabs__header) {
+  background: #fafbfc;
+  margin: 0;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.admin-card :deep(.el-tabs__nav-wrap::after) {
+  display: none;
+}
+
+.admin-card :deep(.el-tabs__item.is-active) {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.admin-card :deep(.el-table th.el-table__cell) {
+  background-color: #fafbfc;
+  color: #606266;
+  font-weight: 600;
+}
+
+.admin-card :deep(.el-table .el-table__row:hover > td) {
+  background-color: #f5f7ff;
 }
 
 .price-val {
   color: #f56c6c;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+/* Section header in data tab */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
 }
 
 .data-section {
@@ -450,6 +490,7 @@ onMounted(() => {
 .data-section h3 {
   margin-bottom: 20px;
   color: #409eff;
+  font-size: 1.15rem;
   border-bottom: 2px solid #ecf5ff;
   padding-bottom: 10px;
 }
@@ -458,9 +499,31 @@ onMounted(() => {
   margin-bottom: 10px;
 }
 
+.excel-upload-box :deep(.el-upload-dragger) {
+  border-radius: 12px;
+  border: 2px dashed #d0d7de;
+  transition: all 0.3s ease;
+}
+
+.excel-upload-box :deep(.el-upload-dragger:hover) {
+  border-color: #409eff;
+  background: #f0f7ff;
+}
+
 .upload-tip {
   font-size: 12px;
   color: #999;
   text-align: center;
+  margin-top: 8px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .admin-container {
+    padding: 20px 12px;
+  }
+  .admin-title {
+    font-size: 1.6rem;
+  }
 }
 </style>

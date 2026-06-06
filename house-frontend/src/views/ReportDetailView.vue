@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Printer, Document, House, Download, Check } from '@element-plus/icons-vue'
+import { ArrowLeft, Printer, Document, House, Download, Check, Picture } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { API_BASE_URL } from '@/config'
 import axios from 'axios'
@@ -241,8 +241,14 @@ const totalPrice = computed(() => {
 <style scoped>
 .report-detail-container {
   padding: 40px;
-  background: #f5f7fa;
+  background: #f0f2f5;
   min-height: 100vh;
+  animation: fadeSlideIn 0.4s ease-out;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .actions-bar {
@@ -257,8 +263,8 @@ const totalPrice = computed(() => {
   margin: 0 auto;
   background: white;
   padding: 60px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  border-radius: 12px;
 }
 
 .header-top {
@@ -306,42 +312,57 @@ const totalPrice = computed(() => {
 .valuation-cards {
   display: flex;
   gap: 20px;
+  flex-wrap: wrap;
 }
 
 .v-card {
   flex: 1;
-  background: #f8f9fb;
-  padding: 20px;
-  border-radius: 8px;
+  min-width: 180px;
+  background: linear-gradient(135deg, #f8f9fb, #f0f2f5);
+  padding: 24px 20px;
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  border: 1px solid #ebeef5;
+  transition: all 0.3s ease;
+}
+
+.v-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
 }
 
 .v-card.highlight {
-  background: #ecf5ff;
+  background: linear-gradient(135deg, #ecf5ff, #d9ecff);
+  border-color: #b3d8ff;
 }
 
 .v-label {
   color: #909399;
   font-size: 0.9rem;
   margin-bottom: 10px;
+  font-weight: 500;
 }
 
 .v-value {
-  font-size: 1.8rem;
-  font-weight: 700;
+  font-size: 1.9rem;
+  font-weight: 800;
   color: #303133;
 }
 
 .v-value small {
   font-size: 0.9rem;
-  font-weight: normal;
+  font-weight: 400;
   margin-left: 4px;
 }
 
 .v-card.highlight .v-value {
-  color: #409eff;
+  color: #007bff;
+  background: linear-gradient(135deg, #007bff, #6610f2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .markdown-body {
@@ -450,6 +471,33 @@ const totalPrice = computed(() => {
 @media print {
   .no-print { display: none !important; }
   .report-detail-container { padding: 0; background: white; }
-  .report-paper { box-shadow: none; padding: 0; max-width: 100%; }
+  .report-paper { box-shadow: none; padding: 20px; max-width: 100%; border-radius: 0; }
+  .valuation-cards { gap: 12px; }
+  .v-card { border: 1px solid #ddd; }
+}
+
+@media (max-width: 768px) {
+  .report-detail-container {
+    padding: 16px;
+  }
+  .report-paper {
+    padding: 24px 16px;
+  }
+  .header-top {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .report-meta {
+    text-align: left;
+  }
+  .valuation-cards {
+    flex-direction: column;
+  }
+  .v-value {
+    font-size: 1.5rem;
+  }
+  .main-title {
+    font-size: 1.6rem;
+  }
 }
 </style>
