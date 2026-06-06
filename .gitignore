@@ -61,3 +61,4 @@ logs/
 # Claude
 CLAUDE.md
 .claude/
+pre_doc/
