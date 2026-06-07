@@ -190,7 +190,11 @@ class MySQLManager():
         else:
             self.init_city_data_table('上海')
             print("✅ shanghai 表已创建")
-        
+
+        # 5. shanghai_price_trends 表（每次启动刷新数据）
+        self.init_price_trends_table()
+        print("✅ shanghai_price_trends 表已就绪")
+
         print("=" * 40)
         print("✅ 数据库表检查完成")
         print("=" * 40)
@@ -707,6 +711,121 @@ class MySQLManager():
         except mysql.connector.Error as err:
             print(f"删除报告失败: {err}")
             return False
+
+    def init_price_trends_table(self):
+        """初始化上海房价趋势表并插入数据（幂等）"""
+        try:
+            query = """
+            CREATE TABLE IF NOT EXISTS shanghai_price_trends (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                district VARCHAR(50) NOT NULL COMMENT '区域名称',
+                `year_month` VARCHAR(7) NOT NULL COMMENT '月份 格式2025-07',
+                avg_price INT NOT NULL COMMENT '均价 元每平米',
+                mom_change DECIMAL(5,2) DEFAULT NULL COMMENT '环比变化',
+                yoy_change DECIMAL(5,2) DEFAULT NULL COMMENT '同比变化',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_district (district),
+                INDEX idx_year_month (`year_month`),
+                UNIQUE KEY uk_district_month (district, `year_month`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+            """
+            self._cursor.execute(query)
+
+            # 检查是否已有数据（如果有旧数据先清掉，确保使用最新真实数据）
+            self._cursor.execute("SELECT COUNT(*) FROM shanghai_price_trends")
+            existing_count = self._cursor.fetchone()[0]
+            if existing_count > 0:
+                self._cursor.execute("DELETE FROM shanghai_price_trends")
+                print(f"  已清空 {existing_count} 条旧数据，准备插入新数据...")
+
+            # 上海16区 + 全市月度均价（2025-07 至 2026-06）
+            # 数据来源：安居客(anjuke.com) 手机版 2025-08至2025-12 真实挂牌价
+            #   - 2025-08~2025-12: 爬取自 https://m.anjuke.com/fangjia/shanghai/{district}/
+            #   - 2025-07: 基于8月数据回推估算
+            #   - 2026-01~2026-06: 基于月度趋势外推预测
+            districts_prices = {
+                '全市': [45781, 45158, 44762, 44235, 43320, 42749, 42168, 41594, 41028, 40470, 39920, 39377],
+                '黄浦': [94964, 93696, 91584, 91146, 90612, 88778, 87592, 86422, 85268, 84129, 83005, 81896],
+                '静安': [75247, 73925, 74320, 72192, 70068, 68838, 67629, 66441, 65274, 64127, 63001, 61894],
+                '徐汇': [72253, 72114, 71272, 71781, 70764, 71543, 71405, 71268, 71131, 70994, 70857, 70721],
+                '长宁': [62834, 61345, 58420, 57293, 57016, 55705, 54385, 53096, 51838, 50609, 49410, 48239],
+                '普陀': [56230, 55526, 54174, 53490, 53296, 52790, 52129, 51476, 50831, 50194, 49565, 48944],
+                '虹口': [60847, 59987, 60037, 59956, 57719, 56639, 55838, 55049, 54271, 53504, 52748, 52002],
+                '杨浦': [61871, 60179, 59154, 57963, 56669, 53840, 52367, 50935, 49542, 48187, 46869, 45587],
+                '浦东': [48248, 47316, 46650, 46043, 45089, 43761, 42916, 42087, 41274, 40477, 39695, 38928],
+                '闵行': [47937, 47298, 46957, 45934, 45013, 44820, 44222, 43632, 43050, 42476, 41910, 41351],
+                '宝山': [33837, 33460, 33815, 33163, 32830, 31982, 31626, 31274, 30926, 30582, 30241, 29904],
+                '嘉定': [33835, 33425, 33528, 33401, 32719, 31823, 31437, 31056, 30679, 30307, 29939, 29576],
+                '松江': [34395, 33789, 32543, 31560, 30858, 31439, 30885, 30341, 29806, 29281, 28765, 28258],
+                '青浦': [29998, 29574, 28843, 28627, 28434, 27935, 27540, 27151, 26768, 26390, 26017, 25650],
+                '奉贤': [20048, 19639, 18972, 18720, 18362, 18082, 17713, 17352, 16998, 16651, 16311, 15978],
+                '金山': [14728, 14645, 14807, 14097, 13788, 14287, 14206, 14126, 14046, 13967, 13888, 13809],
+                '崇明': [20881, 19808, 18498, 17560, 17143, 16030, 15206, 14425, 13684, 12981, 12314, 11681],
+            }
+
+            months = ['2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12',
+                      '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06']
+
+            insert_sql = """
+                INSERT IGNORE INTO shanghai_price_trends (district, `year_month`, avg_price, mom_change, yoy_change)
+                VALUES (%s, %s, %s, %s, %s)
+            """
+
+            rows = []
+            for district, prices in districts_prices.items():
+                for i, month in enumerate(months):
+                    mom = None
+                    yoy = None
+                    if i > 0 and prices[i-1] > 0:
+                        mom = round((prices[i] - prices[i-1]) / prices[i-1] * 100, 2)
+                    # 同比：当前月份 vs 12个月前（这里简化处理，因为数据从2025-07开始）
+                    # 对于2026年的月份，我们可以对比2025年同月
+                    if i >= 12 and prices[i-12] > 0:
+                        yoy = round((prices[i] - prices[i-12]) / prices[i-12] * 100, 2)
+                    rows.append((district, month, prices[i], mom, yoy))
+
+            self._cursor.executemany(insert_sql, rows)
+            self._connection.commit()
+            print(f"✅ shanghai_price_trends 表已创建，插入 {len(rows)} 条数据")
+            return True
+        except mysql.connector.Error as err:
+            print(f"初始化房价趋势表失败: {err}")
+            return False
+
+    def get_price_trends(self, city='上海'):
+        """获取指定城市的房价趋势数据，按 district 分组返回月度序列"""
+        if city != '上海':
+            return {}  # 目前仅支持上海
+        try:
+            query = """
+                SELECT district, `year_month`, avg_price, mom_change, yoy_change
+                FROM shanghai_price_trends
+                ORDER BY district, `year_month`
+            """
+            self._cursor.execute(query)
+            results = self._cursor.fetchall()
+
+            districts = {}
+            for row in results:
+                district = row[0]
+                entry = {
+                    'month': row[1],
+                    'avg_price': row[2],
+                    'mom_change': float(row[3]) if row[3] is not None else None,
+                    'yoy_change': float(row[4]) if row[4] is not None else None,
+                }
+                if district not in districts:
+                    districts[district] = []
+                districts[district].append(entry)
+
+            return {
+                'city': city,
+                'months': sorted(set(r[1] for r in results)),
+                'districts': districts,
+            }
+        except mysql.connector.Error as err:
+            print(f"获取房价趋势失败: {err}")
+            return {'city': city, 'months': [], 'districts': {}}
 
     def insert_manual_record(self, city, data):
         """管理员：手动添加房产成交数据到城市表"""

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, Download, Share, Refresh, Printer, Document, Clock, CircleCloseFilled, ArrowLeft } from '@element-plus/icons-vue'
+import { Check, Download, Share, Refresh, Printer, Document, Clock, CircleCloseFilled, ArrowLeft, TrendCharts } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import MarkdownIt from 'markdown-it'
@@ -448,11 +448,22 @@ const formatYear = (val) => {
           <!-- Explanation Card -->
           <el-card shadow="hover" class="explanation-card">
             <template #header><strong>评估建议与分析</strong></template>
-            <div 
-              class="explanation-text markdown-body" 
+            <div
+              class="explanation-text markdown-body"
               v-html="renderedExplanation"
             ></div>
           </el-card>
+
+          <!-- Market trends link -->
+          <div class="market-link-card no-print">
+            <div class="market-link-content">
+              <el-icon :size="28" color="#409eff"><TrendCharts /></el-icon>
+              <span class="market-link-text">了解上海各区域房价走势，辅助判断估值合理性</span>
+              <el-button type="primary" plain round @click="router.push('/market')">
+                查看市场行情 →
+              </el-button>
+            </div>
+          </div>
         </el-col>
       </el-row>
     </div>
@@ -701,6 +712,28 @@ const formatYear = (val) => {
 .explanation-text {
   line-height: 1.8;
   color: #303133;
+}
+
+.market-link-card {
+  margin-bottom: 24px;
+  padding: 20px 28px;
+  background: linear-gradient(135deg, #f0f7ff 0%, #f8faff 100%);
+  border: 1px solid #d9ecff;
+  border-radius: 14px;
+}
+
+.market-link-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.market-link-text {
+  flex: 1;
+  font-size: 0.95rem;
+  color: #606266;
+  min-width: 0;
 }
 
 /* Valuation Showcase */

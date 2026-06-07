@@ -62,3 +62,5 @@ logs/
 CLAUDE.md
 .claude/
 pre_doc/
+
+.playwright-mcp/

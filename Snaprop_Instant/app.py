@@ -538,6 +538,18 @@ def api_get_cities():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/market/trends', methods=['GET'])
+def api_market_trends():
+    """获取城市房价趋势数据"""
+    try:
+        city = request.args.get('city', '上海')
+        mysql_manager = MySQLManager()
+        data = mysql_manager.get_price_trends(city)
+        mysql_manager.close()
+        return jsonify({"success": True, "data": data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/admin/add_city', methods=['POST'])
 def api_admin_add_city():
     """管理员：添加新城市"""

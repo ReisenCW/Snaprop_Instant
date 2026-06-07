@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { houseStore } from './store'
 import { useRouter } from 'vue-router'
-import { ArrowUp } from '@element-plus/icons-vue'
+import { Monitor, Cpu, Calendar, ArrowUp, User, Setting, SwitchButton, TrendCharts } from '@element-plus/icons-vue'
 import { API_BASE_URL } from './config'
 
 const router = useRouter()
@@ -65,6 +65,10 @@ const userAvatarSrc = computed(() => {
         <el-menu-item index="/history">
           <el-icon><Calendar /></el-icon>
           <span>足迹历史</span>
+        </el-menu-item>
+        <el-menu-item index="/market">
+          <el-icon><TrendCharts /></el-icon>
+          <span>市场行情</span>
         </el-menu-item>
 
         <div class="header-right">

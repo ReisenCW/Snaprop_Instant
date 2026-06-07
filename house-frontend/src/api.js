@@ -35,6 +35,10 @@ export const getProfile = (username) => {
   return apiClient.get(`/api/profile/${username}`)
 }
 
+export const getMarketTrends = (city = '上海') => {
+  return apiClient.get('/api/market/trends', { params: { city } })
+}
+
 export const updateProfile = (data) => {
   return apiClient.post('/api/profile/update', data)
 }
