@@ -212,12 +212,36 @@ class careful_selection:
                 return []
             
             # 2. Vectorized Cleaning and Pre-processing
-            # Remove "Unknown" or "N/A" values for critical features
-            mask = ~df[['house_floor', 'house_area', 'house_type', 'house_decoration', 'house_year']].astype(str).apply(
+            # Fill missing values with sensible defaults instead of dropping records
+            # This allows data from sources like anjuke (which lack floor/deco/year) to still be usable
+
+            # Mark truly invalid records (missing area or type — these are essential)
+            invalid_mask = df[['house_area', 'house_type']].astype(str).apply(
                 lambda x: x.str.contains('暂无数据|未知|None|nan', case=False)
             ).any(axis=1)
-            df = df[mask].copy()
-            
+            invalid_count = invalid_mask.sum()
+            if invalid_count > 0:
+                print(f"Removing {invalid_count} records with missing area/type")
+                df = df[~invalid_mask]
+
+            # Fill optional fields with sensible defaults
+            df = df.copy()
+            if 'house_floor' in df.columns:
+                df['house_floor'] = df['house_floor'].fillna('中楼层').replace('', '中楼层')
+            if 'house_decoration' in df.columns:
+                df['house_decoration'] = df['house_decoration'].fillna('简装').replace('', '简装')
+            if 'house_year' in df.columns:
+                # Use median year from the dataset, or fallback to target year
+                valid_years = pd.to_numeric(df['house_year'], errors='coerce')
+                median_year = valid_years.median()
+                if pd.isna(median_year):
+                    median_year = self.target_year if self.target_year else 2015
+                df['house_year'] = valid_years.fillna(median_year).astype(int)
+            if 'house_direction' in df.columns:
+                df['house_direction'] = df['house_direction'].fillna('南').replace('', '南')
+            if 'house_structure' in df.columns:
+                df['house_structure'] = df['house_structure'].fillna('平层').replace('', '平层')
+
             if df.empty:
                 print("No valid cases remaining after data cleaning.")
                 return []
