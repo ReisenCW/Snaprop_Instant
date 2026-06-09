@@ -1,15 +1,5 @@
 # Test Plan
 
-**Group 14**
-
-| Member Info | |
-|---|---|
-| 2353731 Mao Hanyu | 2353926 Zhao Zeyuan |
-| 2253713 Dai Jin'ou | 2350284 Zhang Junfeng |
-| 2353914 Han Yimo | |
-
-2026-05-25
-
 ---
 
 ## Table of Contents
