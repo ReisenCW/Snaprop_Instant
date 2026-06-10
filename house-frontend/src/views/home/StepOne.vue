@@ -376,12 +376,12 @@ const openOriginalImage = () => {
         <el-form :model="houseInfo" label-position="top">
           <!-- Form rows... -->
           <el-row :gutter="20">
-            <el-col :span="16">
+            <el-col :sm="16" :xs="24">
               <el-form-item label="房产地址">
                 <el-input v-model="houseInfo.address" placeholder="请输入完整房产地址" />
               </el-form-item>
             </el-col>
-            <el-col :span="8">
+            <el-col :sm="8" :xs="24">
               <el-form-item label="所在城市">
                 <el-input v-model="houseInfo.city" placeholder="请输入所在城市" />
               </el-form-item>
@@ -389,21 +389,21 @@ const openOriginalImage = () => {
           </el-row>
 
           <el-row :gutter="20">
-            <el-col :span="8">
+            <el-col :sm="8" :xs="24">
               <el-form-item label="建筑面积 (㎡)">
                 <el-input-number v-model="houseInfo.area" :precision="2" :step="0.1" controls-position="right" style="width: 100%" />
               </el-form-item>
             </el-col>
-            <el-col :span="16">
+            <el-col :sm="16" :xs="24">
               <el-form-item label="户型">
                 <div class="layout-group">
-                  <el-input-number v-model="houseInfo.rooms" :min="0" :max="10" controls-position="right" style="width: 22%" />
+                  <el-input-number v-model="houseInfo.rooms" :min="0" :max="10" controls-position="right" style="flex: 1; min-width: 0" />
                   <span class="unit">室</span>
-                  <el-input-number v-model="houseInfo.halls" :min="0" :max="10" controls-position="right" style="width: 22%" />
+                  <el-input-number v-model="houseInfo.halls" :min="0" :max="10" controls-position="right" style="flex: 1; min-width: 0" />
                   <span class="unit">厅</span>
-                  <el-input-number v-model="houseInfo.kitchens" :min="0" :max="10" controls-position="right" style="width: 22%" />
+                  <el-input-number v-model="houseInfo.kitchens" :min="0" :max="10" controls-position="right" style="flex: 1; min-width: 0" />
                   <span class="unit">厨</span>
-                  <el-input-number v-model="houseInfo.bathrooms" :min="0" :max="10" controls-position="right" style="width: 22%" />
+                  <el-input-number v-model="houseInfo.bathrooms" :min="0" :max="10" controls-position="right" style="flex: 1; min-width: 0" />
                   <span class="unit">卫</span>
                 </div>
               </el-form-item>
@@ -411,7 +411,7 @@ const openOriginalImage = () => {
           </el-row>
 
           <el-row :gutter="20">
-            <el-col :span="8">
+            <el-col :sm="8" :xs="24">
               <el-form-item label="房屋结构">
                 <el-select v-model="houseInfo.structure" placeholder="请选择" style="width: 100%">
                   <el-option label="平层" value="平层" />
@@ -419,7 +419,7 @@ const openOriginalImage = () => {
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="8">
+            <el-col :sm="8" :xs="24">
               <el-form-item label="装修情况">
                 <el-select v-model="houseInfo.decoration" placeholder="请选择" style="width: 100%">
                   <el-option label="毛坯" value="毛坯" />
@@ -428,7 +428,7 @@ const openOriginalImage = () => {
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="8">
+            <el-col :sm="8" :xs="24">
               <el-form-item label="绿化率 (%)">
                 <el-input-number v-model="houseInfo.green_rate" :min="0" :max="100" controls-position="right" style="width: 100%" />
               </el-form-item>
@@ -436,7 +436,7 @@ const openOriginalImage = () => {
           </el-row>
 
           <el-row :gutter="20">
-            <el-col :span="8">
+            <el-col :sm="8" :xs="24">
               <el-form-item label="所在楼层">
                 <el-select v-model="houseInfo.floor" placeholder="请选择" style="width: 100%">
                   <el-option label="低楼层" value="低" />
@@ -445,7 +445,7 @@ const openOriginalImage = () => {
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="8">
+            <el-col :sm="8" :xs="24">
               <el-form-item label="朝向">
                 <el-select v-model="houseInfo.direction" placeholder="请选择" style="width: 100%">
                   <el-option label="东" value="东" />
@@ -459,7 +459,7 @@ const openOriginalImage = () => {
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="8">
+            <el-col :sm="8" :xs="24">
               <el-form-item label="建成年份">
                 <el-date-picker v-model="houseInfo.year" type="year" placeholder="年份" style="width: 100%" />
               </el-form-item>
@@ -801,12 +801,47 @@ const openOriginalImage = () => {
   .step-title {
     font-size: 1.4rem;
   }
+  .step-description {
+    font-size: 0.9rem;
+  }
   .image-preview-wrapper-large {
     height: 220px;
   }
   .layout-group {
     flex-wrap: wrap;
     gap: 4px;
+  }
+  .weight-item span:first-child {
+    font-size: 11px;
+  }
+  :deep(.el-upload-dragger) {
+    padding: 40px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .step-title {
+    font-size: 1.2rem;
+  }
+  .step-description {
+    font-size: 0.82rem;
+  }
+  .header-section {
+    margin-bottom: 18px;
+  }
+  .image-preview-wrapper-large {
+    height: 180px;
+  }
+  .action-footer .el-button {
+    width: 100%;
+    padding: 12px 24px;
+    font-size: 0.95rem;
+  }
+  .cropper-wrapper {
+    height: 280px;
+  }
+  :deep(.el-dialog) {
+    width: 95% !important;
   }
 }
 </style>

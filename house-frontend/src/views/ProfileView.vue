@@ -1,10 +1,10 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft, User, EditPen, Camera, Check, Lock, House,
-  DataAnalysis
+  DataAnalysis, SwitchButton
 } from '@element-plus/icons-vue'
 import 'vue-cropper/dist/index.css'
 import { VueCropper } from 'vue-cropper'
@@ -201,6 +201,21 @@ const userAvatar = () => {
   return av.startsWith('http') ? av : `${API_BASE_URL}${av}`
 }
 
+const handleLogout = async () => {
+  try {
+    await ElMessageBox.confirm('确定要退出登录吗？', '退出确认', {
+      confirmButtonText: '确认退出',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    houseStore.logout()
+    router.push('/')
+    ElMessage.success('您已成功退出登录')
+  } catch {
+    // User cancelled
+  }
+}
+
 const displayName = () => {
   return houseStore.user?.nickname || houseStore.user?.username || '用户'
 }
@@ -259,6 +274,18 @@ const displayName = () => {
               <span class="stat-lbl">生成报告</span>
             </div>
           </div>
+
+          <!-- Logout -->
+          <el-button
+            type="danger"
+            plain
+            :icon="SwitchButton"
+            @click="handleLogout"
+            round
+            class="logout-btn"
+          >
+            退出登录
+          </el-button>
         </div>
       </aside>
 
@@ -572,6 +599,11 @@ const displayName = () => {
   overflow: hidden;
 }
 
+.logout-btn {
+  margin-top: 18px;
+  width: 100%;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .profile-page {
@@ -583,6 +615,12 @@ const displayName = () => {
   .profile-sidebar {
     width: 100%;
   }
+  .profile-main {
+    width: 100%;
+  }
+  .main-card :deep(.el-card__body) {
+    padding: 16px 12px;
+  }
   .sidebar-card {
     padding: 24px 18px;
   }
@@ -591,6 +629,52 @@ const displayName = () => {
   }
   .page-title {
     font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-page {
+    padding: 12px 8px;
+  }
+  .page-top {
+    margin-bottom: 20px;
+    gap: 10px;
+  }
+  .page-title {
+    font-size: 1.2rem;
+  }
+  .sidebar-card {
+    padding: 20px 14px;
+    border-radius: 16px;
+  }
+  .avatar-img {
+    width: 80px !important;
+    height: 80px !important;
+  }
+  .user-display-name {
+    font-size: 1.1rem;
+  }
+  .stat-num {
+    font-size: 1.3rem;
+  }
+  .main-card {
+    border-radius: 14px;
+  }
+  .main-card :deep(.el-card__body) {
+    padding: 12px 8px;
+  }
+  .profile-tabs :deep(.el-tabs__header) {
+    padding: 0 4px;
+  }
+  .profile-tabs :deep(.el-tabs__item) {
+    font-size: 0.88rem;
+    padding: 0 12px;
+  }
+  .profile-form {
+    padding: 4px 0 0;
+  }
+  .cropper-wrapper {
+    height: 260px;
   }
 }
 </style>

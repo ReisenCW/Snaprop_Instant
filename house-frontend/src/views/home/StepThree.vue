@@ -104,6 +104,13 @@ const pdfUrl = ref('')
 const isGeneratingPdf = ref(false)
 const showReportDialog = ref(false)
 
+// Mobile detection for responsive layout
+const isMobile = ref(window.innerWidth <= 768)
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
 // Market trend data for the property's district
 const marketTrendData = ref(null)
 const districtTrend = ref(null)
@@ -273,10 +280,12 @@ const fetchValuation = async () => {
 
 onMounted(() => {
   fetchValuation()
+  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   clearProgress()
+  window.removeEventListener('resize', handleResize)
 })
 
 const restartProcess = () => {
@@ -452,7 +461,7 @@ const formatYear = (val) => {
                 <strong>被估物业信息</strong>
               </div>
             </template>
-            <el-descriptions :column="3" border>
+            <el-descriptions :column="isMobile ? 1 : 3" border>
               <el-descriptions-item label="房屋地址">{{ houseInfo.address || '未填写' }}</el-descriptions-item>
               <el-descriptions-item label="所在城市">{{ houseInfo.city || '未填写' }}</el-descriptions-item>
               <el-descriptions-item label="建筑面积">{{ houseInfo.area }} m²</el-descriptions-item>
@@ -1032,34 +1041,285 @@ const formatYear = (val) => {
   }
 }
 
-/* Responsive */
+/* Responsive — tablet */
 @media (max-width: 768px) {
+  .step-three-container {
+    padding: 14px;
+  }
   .valuation-showcase {
     flex-direction: column;
-    gap: 20px;
-    padding: 20px;
+    gap: 16px;
+    padding: 20px 16px;
   }
   .stat-divider {
     height: 1px;
     width: 80%;
-    margin: 0;
+    margin: 4px 0;
   }
   .valuation-showcase :deep(.el-statistic__number) {
-    font-size: 1.8rem;
+    font-size: 1.7rem;
   }
   .report-title {
-    font-size: 1.6rem;
+    font-size: 1.5rem;
+  }
+  .report-header {
+    flex-wrap: wrap;
+    gap: 8px;
   }
   .loading-card, .error-card {
-    padding: 36px 24px;
+    padding: 32px 20px;
+  }
+  .loading-title {
+    font-size: 1.4rem;
+  }
+  .loading-desc {
+    font-size: 0.9rem;
+    margin-bottom: 28px;
+  }
+  .loading-stages {
+    padding: 20px;
+  }
+  .stage-text {
+    font-size: 0.88rem;
+  }
+  .error-title {
+    font-size: 1.5rem;
+  }
+  .error-icon {
+    font-size: 3.8rem;
   }
   .trend-stats {
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
   }
   .trend-divider {
     height: 1px;
     width: 80%;
+    margin: 4px 0;
+  }
+  .trend-card {
+    padding: 18px 16px;
+  }
+  .trend-stat-value {
+    font-size: 1.15rem;
+  }
+  .market-link-card {
+    padding: 16px 18px;
+  }
+  .market-link-text {
+    font-size: 0.9rem;
+  }
+  .valuation-footer-actions {
+    padding: 20px 12px 10px;
+    gap: 10px;
+  }
+  .valuation-footer-actions .el-button {
+    min-width: 140px;
+    font-size: 0.9rem;
+  }
+  .house-info-card :deep(.el-descriptions__label) {
+    font-size: 0.85rem;
+  }
+  :deep(.markdown-body) {
+    font-size: 14px;
+  }
+}
+
+/* Responsive — phone */
+@media (max-width: 480px) {
+  .step-three-container {
+    padding: 8px;
+  }
+  .loading-state {
+    padding: 30px 0;
+  }
+  .loading-card {
+    padding: 24px 14px;
+    border-radius: 16px;
+  }
+  .loading-animation {
+    margin-bottom: 10px;
+  }
+  .main-loading-icon {
+    font-size: 2.5rem;
+  }
+  .loading-title {
+    font-size: 1.2rem;
+    margin: 12px 0 6px;
+  }
+  .loading-desc {
+    font-size: 0.82rem;
+    margin-bottom: 22px;
+  }
+  .progress-wrapper {
+    margin-bottom: 24px;
+  }
+  .loading-stages {
+    padding: 14px;
+    border-radius: 12px;
+  }
+  .stage-item {
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 4px 6px;
+  }
+  .stage-icon {
+    font-size: 1.1rem;
+  }
+  .stage-text {
+    font-size: 0.8rem;
+  }
+  .error-state {
+    padding: 30px 0;
+  }
+  .error-card {
+    padding: 28px 16px;
+    border-radius: 16px;
+  }
+  .error-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+  }
+  .error-title {
+    font-size: 1.3rem;
+  }
+  .error-desc {
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+  }
+  .error-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .error-actions .el-button {
+    width: 100%;
+  }
+  .report-title {
+    font-size: 1.2rem;
+  }
+  .report-header {
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+  }
+  .valuation-showcase {
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 10px;
+    border-radius: 12px;
+  }
+  .valuation-showcase :deep(.el-statistic__number) {
+    font-size: 1.4rem;
+  }
+  .valuation-showcase :deep(.el-statistic__head) {
+    font-size: 0.8rem;
+  }
+  .stat-divider {
+    height: 1px;
+    width: 70%;
+    margin: 2px 0;
+  }
+  .valuation-footer-actions {
+    padding: 16px 8px 8px;
+    gap: 8px;
+  }
+  .valuation-footer-actions .el-button {
+    min-width: 0;
+    font-size: 0.82rem;
+    padding: 10px 14px;
+  }
+  .trend-card {
+    padding: 14px 12px;
+    border-radius: 12px;
+  }
+  .trend-card-header {
+    gap: 6px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+  }
+  .trend-title {
+    font-size: 0.95rem;
+  }
+  .trend-stats {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .trend-stat-label {
+    font-size: 0.78rem;
+  }
+  .trend-stat-value {
+    font-size: 1.05rem;
+  }
+  .trend-stat-value small {
+    font-size: 0.72rem;
+  }
+  .trend-divider {
+    height: 1px;
+    width: 70%;
+    margin: 2px 0;
+  }
+  .market-link-card {
+    padding: 14px 12px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .market-link-content {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  .market-link-text {
+    font-size: 0.82rem;
+  }
+  .market-link-content .el-button {
+    width: 100%;
+  }
+  .house-info-card {
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .house-info-card :deep(.el-card__body) {
+    padding: 10px;
+  }
+  .house-info-card :deep(.el-descriptions__label) {
+    font-size: 0.78rem;
+    padding: 8px 6px;
+  }
+  .house-info-card :deep(.el-descriptions__content) {
+    font-size: 0.82rem;
+    padding: 8px 6px;
+  }
+  .main-valuation-card {
+    border-radius: 14px;
+    margin-bottom: 16px;
+  }
+  .main-valuation-card :deep(.el-card__header) {
+    padding: 12px 14px;
+  }
+  .explanation-card {
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .explanation-card :deep(.el-card__body) {
+    padding: 12px;
+  }
+  :deep(.markdown-body) {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  :deep(.markdown-body h3) {
+    font-size: 1rem;
+    padding-left: 8px;
+  }
+  :deep(.markdown-body h4) {
+    font-size: 0.9rem;
+  }
+  :deep(.markdown-body table) {
+    font-size: 11px;
+  }
+  :deep(.markdown-body th), :deep(.markdown-body td) {
+    padding: 6px 8px;
   }
 }
 </style>

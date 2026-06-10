@@ -2,15 +2,21 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { houseStore } from './store'
 import { useRouter } from 'vue-router'
-import { Monitor, Cpu, Calendar, ArrowUp, User, Setting, SwitchButton, TrendCharts } from '@element-plus/icons-vue'
+import { Monitor, Cpu, Calendar, ArrowUp, User, Setting, SwitchButton, TrendCharts, Expand, Fold } from '@element-plus/icons-vue'
 import { API_BASE_URL } from './config'
 
 const router = useRouter()
 
 const showBackToTop = ref(false)
+const isMobileMenuOpen = ref(false)
+const isMobile = ref(window.innerWidth <= 768)
 
 const handleScroll = () => {
   showBackToTop.value = window.scrollY > 400
+}
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth <= 768
 }
 
 const scrollToTop = () => {
@@ -19,10 +25,12 @@ const scrollToTop = () => {
 
 onMounted(() => {
   window.addEventListener('scroll', handleScroll)
+  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('resize', handleResize)
 })
 
 const handleLogout = () => {
@@ -50,10 +58,14 @@ const userAvatarSrc = computed(() => {
         class="header-menu"
         :ellipsis="false"
       >
+        <div class="hamburger-btn" @click="isMobileMenuOpen = true">
+          <el-icon :size="24"><Expand /></el-icon>
+        </div>
         <div class="logo-container">
           <img src="/assets/logo.png" alt="房估宝 Logo" class="logo-image" />
           <span class="logo-text">房估宝</span>
         </div>
+        <div class="desktop-menu-items">
         <el-menu-item index="/">
           <el-icon><Monitor /></el-icon>
           <span>首页</span>
@@ -70,10 +82,12 @@ const userAvatarSrc = computed(() => {
           <el-icon><TrendCharts /></el-icon>
           <span>市场行情</span>
         </el-menu-item>
+        </div>
 
         <div class="header-right">
           <template v-if="houseStore.isAuthenticated">
-            <el-dropdown trigger="hover">
+            <!-- Desktop: dropdown menu -->
+            <el-dropdown v-if="!isMobile" trigger="hover">
               <span class="user-info">
                 <el-avatar :size="34" :src="userAvatarSrc" class="nav-avatar">
                   <el-icon :size="20"><User /></el-icon>
@@ -94,12 +108,72 @@ const userAvatarSrc = computed(() => {
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
+            <!-- Mobile: tap avatar → profile directly -->
+            <span v-else class="user-info" @click="$router.push('/profile')">
+              <el-avatar :size="34" :src="userAvatarSrc" class="nav-avatar">
+                <el-icon :size="20"><User /></el-icon>
+              </el-avatar>
+            </span>
           </template>
           <el-button v-else type="primary" round @click="$router.push('/login')" class="login-nav-btn">
             登录 / 注册
           </el-button>
         </div>
       </el-menu>
+
+      <!-- Mobile navigation drawer -->
+      <el-drawer
+        v-model="isMobileMenuOpen"
+        direction="ltr"
+        size="260px"
+        :with-header="false"
+        class="mobile-drawer"
+      >
+        <div class="drawer-content">
+          <div class="drawer-header">
+            <span class="drawer-logo-text">房估宝</span>
+            <el-icon :size="22" class="drawer-close" @click="isMobileMenuOpen = false"><Fold /></el-icon>
+          </div>
+          <div class="drawer-menu-list">
+            <div
+              v-for="item in [
+                { path: '/', icon: Monitor, label: '首页' },
+                { path: '/home', icon: Cpu, label: '智能估值' },
+                { path: '/history', icon: Calendar, label: '足迹历史' },
+                { path: '/market', icon: TrendCharts, label: '市场行情' },
+              ]"
+              :key="item.path"
+              class="drawer-menu-item"
+              :class="{ active: $route.path === item.path }"
+              @click="$router.push(item.path); isMobileMenuOpen = false"
+            >
+              <el-icon :size="20"><component :is="item.icon" /></el-icon>
+              <span>{{ item.label }}</span>
+            </div>
+          </div>
+          <div class="drawer-footer">
+            <template v-if="houseStore.isAuthenticated">
+              <div class="drawer-user">
+                <el-avatar :size="36" :src="userAvatarSrc">
+                  <el-icon :size="20"><User /></el-icon>
+                </el-avatar>
+                <span class="drawer-username">{{ houseStore.user?.nickname || houseStore.user?.username }}</span>
+              </div>
+              <el-button
+                v-if="houseStore.user?.username === 'admin'"
+                block
+                @click="$router.push('/admin'); isMobileMenuOpen = false"
+                class="drawer-btn"
+              >
+                <el-icon><Setting /></el-icon> 系统管理
+              </el-button>
+            </template>
+            <el-button v-else type="primary" block round @click="$router.push('/login'); isMobileMenuOpen = false">
+              登录 / 注册
+            </el-button>
+          </div>
+        </div>
+      </el-drawer>
 
       <main class="main-content">
         <router-view v-slot="{ Component, route }">
@@ -395,12 +469,130 @@ body {
   flex-grow: 0 !important;
 }
 
+/* Hamburger button — hidden on desktop */
+.hamburger-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 8px;
+  margin-right: 8px;
+  border-radius: 8px;
+  color: #303133;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.hamburger-btn:hover {
+  background-color: #f0f2f5;
+  color: #409eff;
+}
+
+/* Desktop menu items wrapper */
+.desktop-menu-items {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* Mobile drawer */
+.mobile-drawer :deep(.el-drawer__body) {
+  padding: 0;
+}
+.drawer-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid #f0f2f5;
+}
+.drawer-logo-text {
+  font-size: 1.3rem;
+  font-weight: 900;
+  background: linear-gradient(135deg, #007bff, #6610f2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.drawer-close {
+  cursor: pointer;
+  color: #909399;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.drawer-close:hover {
+  background: #f0f2f5;
+  color: #303133;
+}
+.drawer-menu-list {
+  flex: 1;
+  padding: 12px 12px;
+}
+.drawer-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 4px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #303133;
+  transition: all 0.2s ease;
+}
+.drawer-menu-item:hover {
+  background: #f5f7fa;
+}
+.drawer-menu-item.active {
+  background: linear-gradient(135deg, #e8f0fe, #f0e6ff);
+  color: #409eff;
+}
+.drawer-footer {
+  padding: 16px 20px 24px;
+  border-top: 1px solid #f0f2f5;
+}
+.drawer-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.drawer-username {
+  font-weight: 600;
+  color: #303133;
+}
+.drawer-btn {
+  margin-bottom: 8px;
+  justify-content: flex-start;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .header-menu {
-    padding: 0 16px;
+    padding: 0 12px;
+  }
+  .hamburger-btn {
+    display: flex;
+  }
+  .desktop-menu-items {
+    display: none;
+  }
+  .logo-container {
+    margin-right: 16px;
+  }
+  .logo-image {
+    height: 42px;
   }
   .logo-text {
+    display: none;
+  }
+  .header-right .username {
     display: none;
   }
   .back-to-top {
@@ -408,6 +600,43 @@ body {
     right: 20px;
     width: 40px;
     height: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-menu {
+    padding: 0 8px;
+  }
+  .logo-image {
+    height: 36px;
+    margin-right: 0;
+  }
+  .logo-container {
+    margin-right: 8px;
+  }
+  .hamburger-btn {
+    padding: 6px;
+  }
+  .login-nav-btn {
+    padding: 6px 14px;
+    font-size: 0.85rem;
+  }
+  .app-footer {
+    padding: 24px 0;
+  }
+  .footer-brand {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .footer-logo-text {
+    font-size: 1rem;
+  }
+  .footer-desc {
+    font-size: 0.8rem;
+  }
+  .footer-copy {
+    font-size: 0.72rem;
+    padding: 0 12px;
   }
 }
 </style>
