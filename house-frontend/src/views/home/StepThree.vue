@@ -1,12 +1,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, Download, Share, Refresh, Printer, Document, Clock, CircleCloseFilled, ArrowLeft, TrendCharts } from '@element-plus/icons-vue'
+import { Check, Download, Share, Refresh, Printer, Document, Clock, CircleCloseFilled, ArrowLeft, TrendCharts, CaretTop, CaretBottom } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import MarkdownIt from 'markdown-it'
 import { houseStore } from '@/store'
-import { startValuation } from '@/api'
+import { startValuation, getMarketTrends, resolveDistrict } from '@/api'
 import { API_BASE_URL } from '@/config'
 import ReportInfoDialog from '@/components/ReportInfoDialog.vue'
 
@@ -39,15 +39,15 @@ let progressInterval = null
 
 // 根据是否开启 LLM 预测调整进度映射
 const getStageByProgress = (p, hasLLM = true) => {
-  if (p < 10) return 0
-  if (p < 35) return 1
-  if (p < 55) return 2
+  if (p < 5)  return 0
+  if (p < 25) return 1
+  if (p < 45) return 2
   if (hasLLM) {
-    if (p < 85) return 3
+    if (p < 80) return 3
     return 4
   } else {
     // 无 LLM 时，跳过阶段 3，直接到阶段 4
-    if (p < 75) return 3
+    if (p < 65) return 3
     return 4
   }
 }
@@ -104,6 +104,75 @@ const pdfUrl = ref('')
 const isGeneratingPdf = ref(false)
 const showReportDialog = ref(false)
 
+// Market trend data for the property's district
+const marketTrendData = ref(null)
+const districtTrend = ref(null)
+const districtName = ref('')
+const SHANGHAI_DISTRICTS = ['黄浦','静安','徐汇','长宁','浦东','虹口','杨浦','普陀','闵行','宝山','嘉定','松江','青浦','奉贤','金山','崇明']
+
+// Match property address to a Shanghai district (LLM-based with string fallback)
+const matchDistrict = async (address) => {
+  if (!address) return '全市'
+  // 1. Try LLM-based resolution
+  try {
+    const res = await resolveDistrict(address)
+    console.log(res.data)
+    if (res.data?.success && res.data.district) {
+      const district = res.data.district.trim()
+      // Validate the returned district is in our known list
+      if (SHANGHAI_DISTRICTS.includes(district)) {
+        return district
+      }
+    }
+  } catch (err) {
+    console.warn('LLM district resolution failed, falling back to string match:', err)
+  }
+  // 2. Fallback: simple string matching
+  for (const d of SHANGHAI_DISTRICTS) {
+    if (address.includes(d)) return d
+  }
+  return '全市'
+}
+
+// Fetch market trends and match to property's district
+const fetchTrendData = async () => {
+  try {
+    const res = await getMarketTrends()
+    if (res.data.success) {
+      marketTrendData.value = res.data.data
+      const matched = await matchDistrict(houseInfo.address)
+      districtName.value = matched
+      const districtData = res.data.data.districts[matched]
+      if (districtData && districtData.length >= 2) {
+        const first = districtData[0]
+        const last = districtData[districtData.length - 1]
+        const change = ((last.avg_price - first.avg_price) / first.avg_price * 100)
+        districtTrend.value = {
+          avgPrice: last.avg_price,
+          change: Math.round(change * 100) / 100,
+          momChange: last.mom_change,
+          yoyChange: last.yoy_change,
+          months: districtData.length,
+        }
+      }
+      // Also check city-wide
+      const cityData = res.data.data.districts['全市']
+      if (cityData && cityData.length >= 2) {
+        const first = cityData[0]
+        const last = cityData[cityData.length - 1]
+        const cityChange = ((last.avg_price - first.avg_price) / first.avg_price * 100)
+        if (!districtTrend.value) {
+          districtTrend.value = {}
+        }
+        districtTrend.value.cityAvgPrice = last.avg_price
+        districtTrend.value.cityChange = Math.round(cityChange * 100) / 100
+      }
+    }
+  } catch (err) {
+    console.error('Failed to fetch market trends:', err)
+  }
+}
+
 // Computed properties for safe data access
 const estimatedPrice = computed(() => {
   if (!valuationResult.value) return 0
@@ -148,6 +217,8 @@ watch(valuationResult, (newVal) => {
       animateValue(displayTotalPrice, totalPrice.value)
       animateValue(displayEstimatedPrice, estimatedPrice.value)
     }, 300)
+    // Fetch market trend data for display
+    fetchTrendData()
   }
 }, { immediate: false })
 
@@ -456,6 +527,48 @@ const formatYear = (val) => {
           </el-card>
 
           <!-- Market trends link -->
+          <!-- District Price Trend Card -->
+          <div v-if="districtTrend" class="trend-card no-print">
+            <div class="trend-card-header">
+              <el-icon :size="22" color="#409eff"><TrendCharts /></el-icon>
+              <span class="trend-title">区域行情趋势</span>
+              <el-tag size="small" effect="plain" type="info">{{ districtName }}</el-tag>
+            </div>
+            <div class="trend-stats">
+              <div class="trend-stat-item">
+                <span class="trend-stat-label">当前均价</span>
+                <span class="trend-stat-value">{{ (districtTrend.avgPrice || 0).toLocaleString() }} <small>元/m²</small></span>
+              </div>
+              <el-divider direction="vertical" class="trend-divider" />
+              <div class="trend-stat-item">
+                <span class="trend-stat-label">近一年涨跌</span>
+                <span class="trend-stat-value trend-change" :class="districtTrend.change >= 0 ? 'up' : 'down'">
+                  <el-icon v-if="districtTrend.change >= 0"><CaretTop /></el-icon>
+                  <el-icon v-else><CaretBottom /></el-icon>
+                  {{ Math.abs(districtTrend.change).toFixed(2) }}%
+                </span>
+              </div>
+              <el-divider direction="vertical" class="trend-divider" />
+              <div class="trend-stat-item" v-if="districtTrend.cityChange !== undefined">
+                <span class="trend-stat-label">全市涨幅</span>
+                <span class="trend-stat-value trend-change" :class="districtTrend.cityChange >= 0 ? 'up' : 'down'">
+                  <el-icon v-if="districtTrend.cityChange >= 0"><CaretTop /></el-icon>
+                  <el-icon v-else><CaretBottom /></el-icon>
+                  {{ Math.abs(districtTrend.cityChange).toFixed(2) }}%
+                </span>
+              </div>
+              <el-divider direction="vertical" class="trend-divider" v-if="districtTrend.yoyChange !== null && districtTrend.yoyChange !== undefined" />
+              <div class="trend-stat-item" v-if="districtTrend.yoyChange !== null && districtTrend.yoyChange !== undefined">
+                <span class="trend-stat-label">同比</span>
+                <span class="trend-stat-value trend-change" :class="districtTrend.yoyChange >= 0 ? 'up' : 'down'">
+                  <el-icon v-if="districtTrend.yoyChange >= 0"><CaretTop /></el-icon>
+                  <el-icon v-else><CaretBottom /></el-icon>
+                  {{ Math.abs(districtTrend.yoyChange).toFixed(2) }}%
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div class="market-link-card no-print">
             <div class="market-link-content">
               <el-icon :size="28" color="#409eff"><TrendCharts /></el-icon>
@@ -715,6 +828,82 @@ const formatYear = (val) => {
   color: #303133;
 }
 
+/* Trend Card */
+.trend-card {
+  margin-bottom: 24px;
+  padding: 24px 28px;
+  background: linear-gradient(135deg, #fefefe 0%, #fafbff 100%);
+  border: 1px solid #ebeef5;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+
+.trend-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.trend-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #303133;
+}
+
+.trend-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.trend-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 120px;
+}
+
+.trend-stat-label {
+  font-size: 0.85rem;
+  color: #909399;
+}
+
+.trend-stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #303133;
+}
+
+.trend-stat-value small {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: #909399;
+}
+
+.trend-change {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.trend-change.up {
+  color: #67C23A;
+}
+
+.trend-change.down {
+  color: #F56C6C;
+}
+
+.trend-divider {
+  height: 40px;
+}
+
 .market-link-card {
   margin-bottom: 24px;
   padding: 20px 28px;
@@ -863,6 +1052,14 @@ const formatYear = (val) => {
   }
   .loading-card, .error-card {
     padding: 36px 24px;
+  }
+  .trend-stats {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .trend-divider {
+    height: 1px;
+    width: 80%;
   }
 }
 </style>

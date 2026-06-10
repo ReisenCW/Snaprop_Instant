@@ -572,6 +572,22 @@ def api_admin_add_city():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/address/district', methods=['POST'])
+def api_address_district():
+    """使用 LLM 判断上海地址所属行政区"""
+    try:
+        data = request.get_json()
+        address = data.get('address', '')
+        if not address:
+            return jsonify({"success": False, "error": "地址不能为空"}), 400
+        from llm.llm_manager import QianwenManager
+        qm = QianwenManager()
+        district = qm.resolve_district(address)
+        return jsonify({"success": True, "district": district})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/get_surrounding', methods=['POST'])
 def api_get_surrounding():
     """获取周边环境描述API"""
@@ -863,7 +879,7 @@ def api_valuation():
         # 这里逻辑沿用原来的 PropertyValuationSystem.estimate_property_value 但不生成报告
         from price.careful_selection import careful_selection
         mysql_manager = MySQLManager()
-        city = data.get('city', '上海')
+        city = data.get('city') or '上海'
         house_type_full = f"{data.get('room')}室{data.get('hall')}厅{data.get('kitchen',1)}厨{data.get('bathroom',1)}卫"
         
         # 获取专家权重

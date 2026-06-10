@@ -63,11 +63,34 @@ class MySQLManager():
         return self._cursor
 
     def get_table(self, city):
-        # 先在静态映射里找
+        """根据城市名称获取对应的数据表名，支持归一化和DB回退"""
+        if not city:
+            return None
+        city = city.strip()
+        # 1. 静态映射直接查找
         table = self.city_tables.get(city)
-        if table: return table
-        # 如果没找到，尝试拼音或查询数据库（这里简化为：如果没找到就查数据库或者直接返回None）
-        # 实际项目中建议在数据库有一张映射表
+        if table:
+            return table
+        # 2. 去掉"市"后缀再试
+        if city.endswith('市'):
+            table = self.city_tables.get(city[:-1])
+            if table:
+                return table
+        # 3. 尝试加"市"后缀再试（处理 OCR 可能漏掉"市"的情况）
+        table = self.city_tables.get(city + '市')
+        if table:
+            return table
+        # 4. 回退：查询数据库 city 表
+        try:
+            query = "SELECT table_name FROM city WHERE city_name IN (%s, %s)"
+            self._cursor.execute(query, (city, city + '市'))
+            row = self._cursor.fetchone()
+            if row and row[0]:
+                table_name = row[0]
+                MySQLManager.city_tables[city] = table_name  # 缓存供后续使用
+                return table_name
+        except Exception as e:
+            print(f"get_table DB fallback query failed: {e}")
         return None
 
     def get_all_cities_list(self):
@@ -93,14 +116,39 @@ class MySQLManager():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
             """
             self._cursor.execute(query)
-            
-            # 添加默认城市
+
+            # 添加 table_name 列（如果尚不存在，兼容旧表结构）
+            try:
+                alter_query = "ALTER TABLE city ADD COLUMN table_name VARCHAR(100)"
+                self._cursor.execute(alter_query)
+                self._connection.commit()
+                print("city 表已添加 table_name 列")
+            except mysql.connector.Error:
+                pass  # 列已存在，忽略
+
+            # 添加默认城市，同时写入 table_name
             check_query = "SELECT COUNT(*) FROM city WHERE city_name='上海'"
             self._cursor.execute(check_query)
             if self._cursor.fetchone()[0] == 0:
-                insert_query = "INSERT INTO city (city_name, city_introduction, detail) VALUES (%s, %s, %s)"
-                self._cursor.execute(insert_query, ("上海", "上海是中国直辖市，国家中心城市，超大城市。", "上海是中国经济、金融、贸易、航运、科技创新中心。"))
-            
+                insert_query = "INSERT INTO city (city_name, city_introduction, detail, table_name) VALUES (%s, %s, %s, %s)"
+                self._cursor.execute(insert_query, ("上海", "上海是中国直辖市，国家中心城市，超大城市。", "上海是中国经济、金融、贸易、航运、科技创新中心。", "shanghai"))
+            else:
+                # 对已有记录补全 table_name
+                try:
+                    update_query = "UPDATE city SET table_name = 'shanghai' WHERE city_name = '上海' AND table_name IS NULL"
+                    self._cursor.execute(update_query)
+                except mysql.connector.Error:
+                    pass
+
+            # 从数据库加载所有 city→table 映射到内存
+            try:
+                load_query = "SELECT city_name, table_name FROM city WHERE table_name IS NOT NULL"
+                self._cursor.execute(load_query)
+                for row in self._cursor.fetchall():
+                    MySQLManager.city_tables[row[0]] = row[1]
+            except mysql.connector.Error:
+                pass
+
             self._connection.commit()
             return True
         except mysql.connector.Error as err:
@@ -202,9 +250,9 @@ class MySQLManager():
     def add_new_city(self, city_name, table_name, intro="", detail=""):
         """管理员：添加新城市并创建对应的数据表"""
         try:
-            # 1. 写入 city 模型表
-            query_city = "INSERT INTO city (city_name, city_introduction, detail) VALUES (%s, %s, %s)"
-            self._cursor.execute(query_city, (city_name, intro, detail))
+            # 1. 写入 city 模型表（包含 table_name 以支持持久化映射）
+            query_city = "INSERT INTO city (city_name, city_introduction, detail, table_name) VALUES (%s, %s, %s, %s)"
+            self._cursor.execute(query_city, (city_name, intro, detail, table_name))
             
             # 2. 创建房产数据表 (基于上海表结构，包含经纬度)
             query_create = f"""

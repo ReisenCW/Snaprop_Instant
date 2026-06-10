@@ -60,3 +60,13 @@ class QianwenManager():
         prompt = Prompt.PROMPT_NEAR_LOC_SHORT.format(near_places=",".join(near_places), hospital=",".join(hospital),
                                                      school=",".join(school))
         return self.interact_qwen(prompt=prompt, request="")
+
+    def resolve_district(self, address: str):
+        """使用 LLM 判断上海地址所属行政区"""
+        prompt = (
+            "你是一个上海地理专家。请判断以下地址属于哪个上海行政区。"
+            "只回答区名，不要任何解释。可选区：黄浦、静安、徐汇、长宁、浦东、虹口、杨浦、普陀、闵行、宝山、嘉定、松江、青浦、奉贤、金山、崇明。"
+            "如果无法确定，回答\"全市\"。"
+        )
+        result = self.interact_qwen(prompt=prompt, request=address)
+        return result.strip() if result else "全市"

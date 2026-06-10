@@ -43,6 +43,10 @@ export const updateProfile = (data) => {
   return apiClient.post('/api/profile/update', data)
 }
 
+export const resolveDistrict = (address) => {
+  return apiClient.post('/api/address/district', { address })
+}
+
 export const uploadAvatar = (file, username) => {
   const fd = new FormData()
   fd.append('file', file)
