@@ -39,31 +39,32 @@ let progressInterval = null
 
 // 根据是否开启 LLM 预测调整进度映射
 const getStageByProgress = (p, hasLLM = true) => {
-  if (p < 15) return 0
-  if (p < 38) return 1
+  if (p < 10) return 0
+  if (p < 35) return 1
   if (p < 55) return 2
   if (hasLLM) {
-    if (p < 92) return 3
+    if (p < 85) return 3
     return 4
   } else {
     // 无 LLM 时，跳过阶段 3，直接到阶段 4
-    if (p < 75) return 3 // 对应原来的阶段 4
+    if (p < 75) return 3
     return 4
   }
 }
 
 // 各阶段进度速度，参考实际耗时（每 500ms 一次 tick）：
-//   0→15%  : 前置解析/定位    ~1s   → 快速
-//   15→38% : 联网搜索+精简    ~11s  → 中速
-//   38→55% : 案例检索/Memory  ~3s   → 较快
-//   55→92% : LLM 趋势预测     ~37s  → 极慢（避免卡在95%等待）
-//   92→95% : 最终整合         ~2s
+//   0→10%  : 前置解析/定位    ~0.8s → 快速
+//   10→35% : OCR提取+案例搜索  ~2s   → 快速
+//   35→55% : IMCA估值计算      ~3.5s → 中速
+//   55→85% : LLM 趋势预测     ~8s   → 中速（LLM实际10-30s，此为展示缓冲）
+//   85→93% : 最终整合         ~3s   → 慢速
+//   93%    : 封顶等待API响应（进度条自然到达93%后等待后端返回）
 const getIncrement = (p) => {
-  if (p < 15)  return Math.random() * 5   + 3    // 快：0→15 约1s
-  if (p < 38)  return Math.random() * 0.8 + 0.7  // 中：15→38 约11s
-  if (p < 55)  return Math.random() * 1.5 + 1.5  // 较快：38→55 约4s
-  if (p < 92)  return Math.random() * 0.3 + 0.25 // 极慢：55→92 约46s（覆盖37s LLM）
-  if (p < 95)  return Math.random() * 0.5 + 0.5  // 收尾：92→95 约2s
+  if (p < 10)  return Math.random() * 2 + 10
+  if (p < 35)  return Math.random() * 2 + 10
+  if (p < 55)  return Math.random() * 1 + 7
+  if (p < 85)  return Math.random() * 1 + 4
+  if (p < 93)  return Math.random() * 0.8 + 5
   return 0
 }
 
@@ -75,8 +76,8 @@ const startProgress = () => {
   const hasLLM = houseInfo.enablePrediction !== false
   progressInterval = setInterval(() => {
     const p = loadingProgress.value
-    if (p < 95) {
-      loadingProgress.value = Math.min(p + getIncrement(p), 95)
+    if (p < 93) {
+      loadingProgress.value = Math.min(p + getIncrement(p), 93)
       const stage = getStageByProgress(loadingProgress.value, hasLLM)
       if (stage > loadingStage.value) {
         loadingStage.value = stage
