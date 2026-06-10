@@ -47,6 +47,18 @@ export const resolveDistrict = (address) => {
   return apiClient.post('/api/address/district', { address })
 }
 
+export const getListingAdvice = (data) => {
+  return apiClient.post('/api/listing/advice', data)
+}
+
+export const generateDescription = (property, style) => {
+  return apiClient.post('/api/generate/description', { property, style })
+}
+
+export const batchExtractFields = (tableData) => {
+  return apiClient.post('/api/batch/extract', { table_data: tableData })
+}
+
 export const uploadAvatar = (file, username) => {
   const fd = new FormData()
   fd.append('file', file)

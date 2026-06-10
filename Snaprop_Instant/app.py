@@ -588,6 +588,182 @@ def api_address_district():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/listing/advice', methods=['POST'])
+def api_listing_advice():
+    """挂牌价智能建议API"""
+    try:
+        data = request.get_json()
+        estimated_price = float(data.get('estimated_price', 0))
+        total_price = float(data.get('total_price', 0))
+        if estimated_price <= 0:
+            return jsonify({"success": False, "error": "估价异常"}), 400
+
+        market_trend = float(data.get('market_trend', 0))
+        # trend_adjust: 市场上行时放大浮动区间，下行时缩小
+        trend_adjust = max(min(market_trend * 0.3, 0.03), -0.02)
+
+        # 快速出售价：比估值低5%左右
+        quick_discount = 0.05 - trend_adjust
+        quick_unit = round(estimated_price * (1 - quick_discount))
+        quick_total = round(total_price * (1 - quick_discount))
+
+        # 理想价位：直接用估值
+        ideal_unit = round(estimated_price)
+        ideal_total = round(total_price)
+
+        # 试探性高价：比估值高5%-8%
+        exploratory_premium = 0.05 + trend_adjust
+        exploratory_unit = round(estimated_price * (1 + exploratory_premium))
+        exploratory_total = round(total_price * (1 + exploratory_premium))
+
+        # 市场判断
+        if market_trend > 0.03:
+            confidence_note = "当前区域市场处于上升通道，建议以试探性高价挂牌，可适当提高预期"
+        elif market_trend < -0.02:
+            confidence_note = "当前区域市场有所回调，建议以快速出售价挂牌以缩短成交周期"
+        else:
+            confidence_note = "当前区域市场较为平稳，建议以理想价位挂牌，根据看房反馈灵活调整"
+
+        return jsonify({
+            "success": True,
+            "advice": {
+                "quick_sale": {
+                    "unit_price": quick_unit,
+                    "total_price": quick_total,
+                    "label": "快速出售价",
+                    "desc": f"略低于市场价约{int(quick_discount * 100)}%，利于快速成交"
+                },
+                "ideal": {
+                    "unit_price": ideal_unit,
+                    "total_price": ideal_total,
+                    "label": "理想价位",
+                    "desc": "基于IMCA市场比较法估值，贴近市场公允价值"
+                },
+                "exploratory": {
+                    "unit_price": exploratory_unit,
+                    "total_price": exploratory_total,
+                    "label": "试探性高价",
+                    "desc": f"高于市场价约{int(exploratory_premium * 100)}%，预留议价空间"
+                },
+                "confidence_note": confidence_note
+            }
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/generate/description', methods=['POST'])
+def api_generate_description():
+    """AI 房源描述生成API"""
+    try:
+        data = request.get_json()
+        property_info = data.get('property', {})
+        style = data.get('style', 'professional')
+        if not property_info or not property_info.get('address'):
+            return jsonify({"success": False, "error": "房源信息不完整"}), 400
+        if style not in ('professional', 'warm', 'investment'):
+            style = 'professional'
+
+        from llm.llm_manager import QianwenManager
+        qm = QianwenManager()
+        description = qm.generate_listing_description(property_info, style)
+        return jsonify({"success": True, "description": description, "style": style})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/batch/extract', methods=['POST'])
+def api_batch_extract():
+    """批量OCR后用LLM提取房产字段"""
+    try:
+        data = request.get_json()
+        table_data = data.get('table_data', [])
+        if not table_data:
+            return jsonify({"success": False, "error": "缺少OCR表格数据"}), 400
+
+        # 将 table_data 格式化为文本供 LLM 分析
+        # table_data 格式: [[field1, value1], [field2, value2], ...] 或 [{field, value}, ...]
+        text_parts = []
+        for row in table_data:
+            if isinstance(row, dict):
+                f = row.get('field', '') or row.get('label', '')
+                v = row.get('value', '') or row.get('text', '')
+                if f or v:
+                    text_parts.append(f"{f}: {v}" if f else str(v))
+            elif isinstance(row, (list, tuple)) and len(row) >= 2:
+                text_parts.append(f"{row[0]}: {row[1]}")
+            elif isinstance(row, str):
+                text_parts.append(row)
+
+        ocr_text = "\n".join(text_parts)
+        if not ocr_text.strip():
+            return jsonify({"success": False, "error": "OCR表格数据为空"}), 400
+
+        from llm.llm_manager import QianwenManager
+        qm = QianwenManager()
+        fields = qm.batch_extract_fields(ocr_text)
+
+        if not fields:
+            # LLM 提取失败，回退到简单的正则提取
+            content = ocr_text
+            fields = {"address": "", "city": "", "area": 0, "room": 2, "hall": 1,
+                      "kitchen": 1, "bathroom": 1, "floor": "中楼层", "fitment": "精装",
+                      "structure": "平层", "direction": "南", "year": 2015, "green_rate": 35}
+            # 基本正则提取
+            addr_match = re.search(r'(?:房地坐落|坐落|地址)\s*[:：\s]*([^\n\r，。,;；]*)', content)
+            if addr_match:
+                fields["address"] = addr_match.group(1).strip()
+                if "上海" in fields["address"] or "沪" in fields["address"]:
+                    fields["city"] = "上海"
+            area_match = re.search(r'(?:建筑面积|面积)\s*[:：\s]*(\d+(?:\.\d+)?)', content)
+            if area_match:
+                try:
+                    fields["area"] = float(area_match.group(1))
+                except:
+                    pass
+            room_match = re.search(r'(?:[^0-9]|^)([1-9])\s*(?:室|房)', content)
+            if room_match:
+                fields["room"] = int(room_match.group(1))
+            hall_match = re.search(r'([0-9])\s*厅', content)
+            if hall_match:
+                fields["hall"] = int(hall_match.group(1))
+            year_match = re.search(r'((?:20|19)\d{2})\s*年', content)
+            if year_match:
+                fields["year"] = int(year_match.group(1))
+
+        # 确保所有关键字段存在且类型正确
+        defaults = {"address": "", "city": "上海", "area": 100, "room": 3, "hall": 2,
+                    "kitchen": 1, "bathroom": 1, "floor": "中楼层", "fitment": "精装",
+                    "structure": "平层", "direction": "南", "year": 2015, "green_rate": 35}
+        for k, dv in defaults.items():
+            if k not in fields or fields[k] is None:
+                fields[k] = dv
+            elif k in ("area", "room", "hall", "kitchen", "bathroom", "year", "green_rate"):
+                try:
+                    if k == "area":
+                        fields[k] = float(fields[k])
+                    else:
+                        fields[k] = int(fields[k])
+                except (ValueError, TypeError):
+                    fields[k] = dv
+
+        # 规范化枚举值
+        if fields.get("floor") not in ("低楼层", "中楼层", "高楼层"):
+            fields["floor"] = "中楼层"
+        if fields.get("fitment") not in ("精装", "简装", "毛坯"):
+            fields["fitment"] = "精装"
+        if fields.get("structure") not in ("平层", "复式"):
+            fields["structure"] = "平层"
+
+        return jsonify({"success": True, "fields": fields})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/get_surrounding', methods=['POST'])
 def api_get_surrounding():
     """获取周边环境描述API"""

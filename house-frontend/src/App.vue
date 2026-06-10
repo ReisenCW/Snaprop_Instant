@@ -138,7 +138,7 @@ const userAvatarSrc = computed(() => {
             <div
               v-for="item in [
                 { path: '/', icon: Monitor, label: '首页' },
-                { path: '/home', icon: Cpu, label: '智能估值' },
+                { path: '/home/mode', icon: Cpu, label: '智能估值' },
                 { path: '/history', icon: Calendar, label: '足迹历史' },
                 { path: '/market', icon: TrendCharts, label: '市场行情' },
               ]"

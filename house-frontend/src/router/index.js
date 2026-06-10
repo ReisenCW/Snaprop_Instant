@@ -6,6 +6,10 @@ import ReportDetailView from '../views/ReportDetailView.vue'
 import StepOne from '../views/home/StepOne.vue'
 import StepTwo from '../views/home/StepTwo.vue'
 import StepThree from '../views/home/StepThree.vue'
+import ModeSelect from '../views/home/ModeSelect.vue'
+import BatchUpload from '../views/home/BatchUpload.vue'
+import BatchResults from '../views/home/BatchResults.vue'
+import BatchReview from '../views/home/BatchReview.vue'
 import LoginView from '../views/LoginView.vue'
 import { houseStore } from '../store'
 
@@ -23,7 +27,12 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/home/step1'
+          redirect: '/home/mode'
+        },
+        {
+          path: 'mode',
+          name: 'mode',
+          component: ModeSelect,
         },
         {
           path: 'step1',
@@ -39,6 +48,21 @@ const router = createRouter({
           path: 'step3',
           name: 'step3',
           component: StepThree,
+        },
+        {
+          path: 'batch',
+          name: 'batch',
+          component: BatchUpload,
+        },
+        {
+          path: 'batch-review',
+          name: 'batch-review',
+          component: BatchReview,
+        },
+        {
+          path: 'batch-results',
+          name: 'batch-results',
+          component: BatchResults,
         }
       ]
     },

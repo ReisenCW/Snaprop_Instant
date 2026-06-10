@@ -21,6 +21,8 @@ export const houseStore = reactive({
   selectionWeights: null, // 专家权重
   valuationData: null,
   cert_image: '',
+  batchResults: null,  // 批量估值结果
+  batchExtractions: null,  // 批量OCR识别结果（待确认编辑）
 
   // Auth state
   user: stored.username ? {
@@ -83,5 +85,7 @@ export const houseStore = reactive({
     this.selectionWeights = null
     this.valuationData = null
     this.cert_image = ''
+    this.batchResults = null
+    this.batchExtractions = null
   }
 })

@@ -10,12 +10,18 @@ const activeStep = computed(() => {
   if (route.path.includes('step3')) return 2
   return 0
 })
+
+const showStepper = computed(() => {
+  // Hide stepper on mode select and batch pages
+  const p = route.path
+  return !p.includes('/mode') && !p.includes('/batch')
+})
 </script>
 
 <template>
   <div class="home-layout">
     <!-- Progress Header -->
-    <div class="stepper-card">
+    <div class="stepper-card" v-if="showStepper">
       <el-steps :active="activeStep" finish-status="success" align-center>
         <el-step title="步骤 1" description="房产基本信息" />
         <el-step title="步骤 2" description="房产外观环境" />

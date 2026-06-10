@@ -1,12 +1,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, Download, Share, Refresh, Printer, Document, Clock, CircleCloseFilled, ArrowLeft, TrendCharts, CaretTop, CaretBottom } from '@element-plus/icons-vue'
+import { Check, Download, Share, Refresh, Printer, Document, Clock, CircleCloseFilled, ArrowLeft, TrendCharts, CaretTop, CaretBottom, CopyDocument, MagicStick } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import MarkdownIt from 'markdown-it'
 import { houseStore } from '@/store'
-import { startValuation, getMarketTrends, resolveDistrict } from '@/api'
+import { startValuation, getMarketTrends, resolveDistrict, getListingAdvice, generateDescription } from '@/api'
 import { API_BASE_URL } from '@/config'
 import ReportInfoDialog from '@/components/ReportInfoDialog.vue'
 
@@ -180,6 +180,76 @@ const fetchTrendData = async () => {
   }
 }
 
+// ---- Listing Price Advice ----
+const listingAdvice = ref(null)
+const isFetchingAdvice = ref(false)
+
+const fetchListingAdvice = async () => {
+  if (!valuationResult.value) return
+  try {
+    isFetchingAdvice.value = true
+    const trend = (districtTrend.value?.change || 0) / 100
+    const res = await getListingAdvice({
+      estimated_price: estimatedPrice.value,
+      total_price: estimatedPrice.value * (houseInfo.area || 100),
+      city: houseInfo.city || '上海',
+      district: districtName.value || '全市',
+      market_trend: trend
+    })
+    if (res.data?.success) {
+      listingAdvice.value = res.data.advice
+    }
+  } catch (err) {
+    console.error('Failed to fetch listing advice:', err)
+  } finally {
+    isFetchingAdvice.value = false
+  }
+}
+
+// ---- AI Listing Description ----
+const descriptionStyle = ref('professional')
+const isGeneratingDesc = ref(false)
+const generatedDesc = ref('')
+const descGenerated = ref(false)
+
+const handleGenerateDesc = async () => {
+  try {
+    isGeneratingDesc.value = true
+    const property = {
+      address: houseInfo.address || '',
+      area: houseInfo.area || 100,
+      house_type: `${houseInfo.rooms || 3}室${houseInfo.halls || 2}厅`,
+      floor: houseInfo.floor || '中楼层',
+      fitment: houseInfo.decoration || '精装',
+      direction: houseInfo.direction || '南',
+      year: houseInfo.year || 2015,
+      green_rate: houseInfo.green_rate || 35,
+      structure: houseInfo.structure || '平层'
+    }
+    const res = await generateDescription(property, descriptionStyle.value)
+    if (res.data?.success) {
+      generatedDesc.value = res.data.description
+      descGenerated.value = true
+      ElMessage.success('房源描述生成成功')
+    } else {
+      ElMessage.error(res.data?.error || '生成失败')
+    }
+  } catch (err) {
+    ElMessage.error('生成描述失败，请稍后重试')
+  } finally {
+    isGeneratingDesc.value = false
+  }
+}
+
+const copyDescription = async () => {
+  try {
+    await navigator.clipboard.writeText(generatedDesc.value)
+    ElMessage.success('已复制到剪贴板')
+  } catch {
+    ElMessage.error('复制失败，请手动复制')
+  }
+}
+
 // Computed properties for safe data access
 const estimatedPrice = computed(() => {
   if (!valuationResult.value) return 0
@@ -225,7 +295,9 @@ watch(valuationResult, (newVal) => {
       animateValue(displayEstimatedPrice, estimatedPrice.value)
     }, 300)
     // Fetch market trend data for display
-    fetchTrendData()
+    fetchTrendData().then(() => {
+      fetchListingAdvice()
+    })
   }
 }, { immediate: false })
 
@@ -578,6 +650,74 @@ const formatYear = (val) => {
             </div>
           </div>
 
+          <!-- Listing Price Advice Card -->
+          <div v-if="listingAdvice" class="listing-advice-card no-print">
+            <div class="advice-header">
+              <el-icon :size="22" color="#e6a23c"><TrendCharts /></el-icon>
+              <span class="advice-title">挂牌价智能建议</span>
+            </div>
+            <p class="advice-note">{{ listingAdvice.confidence_note }}</p>
+            <div class="advice-tiers">
+              <div class="tier-item tier-quick">
+                <span class="tier-label">{{ listingAdvice.quick_sale.label }}</span>
+                <span class="tier-unit">{{ listingAdvice.quick_sale.unit_price.toLocaleString() }} <small>元/㎡</small></span>
+                <span class="tier-total">总价 {{ (listingAdvice.quick_sale.total_price / 10000).toFixed(0) }}万</span>
+                <span class="tier-desc">{{ listingAdvice.quick_sale.desc }}</span>
+              </div>
+              <div class="tier-item tier-ideal">
+                <span class="tier-label">{{ listingAdvice.ideal.label }}</span>
+                <span class="tier-unit">{{ listingAdvice.ideal.unit_price.toLocaleString() }} <small>元/㎡</small></span>
+                <span class="tier-total">总价 {{ (listingAdvice.ideal.total_price / 10000).toFixed(0) }}万</span>
+                <span class="tier-desc">{{ listingAdvice.ideal.desc }}</span>
+              </div>
+              <div class="tier-item tier-exploratory">
+                <span class="tier-label">{{ listingAdvice.exploratory.label }}</span>
+                <span class="tier-unit">{{ listingAdvice.exploratory.unit_price.toLocaleString() }} <small>元/㎡</small></span>
+                <span class="tier-total">总价 {{ (listingAdvice.exploratory.total_price / 10000).toFixed(0) }}万</span>
+                <span class="tier-desc">{{ listingAdvice.exploratory.desc }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Listing Description Panel -->
+          <div class="ai-desc-card no-print">
+            <div class="desc-header">
+              <el-icon :size="22" color="#6610f2"><MagicStick /></el-icon>
+              <span class="desc-title">AI 房源描述生成</span>
+              <span class="desc-subtitle">一键生成专业挂牌描述，支持多种风格</span>
+            </div>
+            <div class="desc-controls">
+              <el-radio-group v-model="descriptionStyle" class="style-selector">
+                <el-radio-button value="professional">专业客观型</el-radio-button>
+                <el-radio-button value="warm">生活温馨型</el-radio-button>
+                <el-radio-button value="investment">投资价值型</el-radio-button>
+              </el-radio-group>
+              <el-button
+                type="primary"
+                :icon="MagicStick"
+                :loading="isGeneratingDesc"
+                @click="handleGenerateDesc"
+                round
+              >
+                {{ descGenerated ? '重新生成' : '生成描述' }}
+              </el-button>
+            </div>
+            <div v-if="generatedDesc" class="desc-result">
+              <div class="desc-text">{{ generatedDesc }}</div>
+              <el-button
+                type="success"
+                plain
+                :icon="CopyDocument"
+                @click="copyDescription"
+                round
+                size="small"
+                class="copy-btn"
+              >
+                一键复制
+              </el-button>
+            </div>
+          </div>
+
           <div class="market-link-card no-print">
             <div class="market-link-content">
               <el-icon :size="28" color="#409eff"><TrendCharts /></el-icon>
@@ -913,6 +1053,167 @@ const formatYear = (val) => {
   height: 40px;
 }
 
+/* ---- Listing Advice Card ---- */
+.listing-advice-card {
+  margin-bottom: 24px;
+  padding: 24px 28px;
+  background: linear-gradient(135deg, #fffdf0 0%, #fffbf0 100%);
+  border: 1px solid #fae4a3;
+  border-radius: 14px;
+}
+
+.advice-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.advice-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #303133;
+}
+
+.advice-note {
+  margin: 0 0 18px;
+  font-size: 0.9rem;
+  color: #b88230;
+  background: #fef6e6;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border-left: 4px solid #e6a23c;
+}
+
+.advice-tiers {
+  display: flex;
+  gap: 16px;
+}
+
+.tier-item {
+  flex: 1;
+  padding: 20px 16px;
+  border-radius: 14px;
+  text-align: center;
+  transition: transform 0.25s ease;
+}
+
+.tier-item:hover {
+  transform: translateY(-3px);
+}
+
+.tier-quick {
+  background: linear-gradient(180deg, #f0f9eb 0%, #e8f5e0 100%);
+  border: 1px solid #c8e6c9;
+}
+
+.tier-ideal {
+  background: linear-gradient(180deg, #f0f5ff 0%, #e8eefe 100%);
+  border: 1px solid #c8d9f5;
+}
+
+.tier-exploratory {
+  background: linear-gradient(180deg, #fff7ed 0%, #fef0e0 100%);
+  border: 1px solid #f5d5a8;
+}
+
+.tier-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #303133;
+  margin-bottom: 8px;
+}
+
+.tier-quick .tier-label { color: #529b2e; }
+.tier-ideal .tier-label { color: #337ecc; }
+.tier-exploratory .tier-label { color: #e0830a; }
+
+.tier-unit {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.tier-unit small {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #909399;
+}
+
+.tier-total {
+  display: block;
+  font-size: 0.9rem;
+  color: #606266;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.tier-desc {
+  display: block;
+  font-size: 0.78rem;
+  color: #909399;
+  line-height: 1.5;
+}
+
+/* ---- AI Description Card ---- */
+.ai-desc-card {
+  margin-bottom: 24px;
+  padding: 24px 28px;
+  background: linear-gradient(135deg, #f8f5ff 0%, #faf8ff 100%);
+  border: 1px solid #e0d4f5;
+  border-radius: 14px;
+}
+
+.desc-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.desc-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #303133;
+}
+
+.desc-subtitle {
+  font-size: 0.85rem;
+  color: #909399;
+  margin-left: 4px;
+}
+
+.desc-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.desc-result {
+  background: white;
+  border-radius: 12px;
+  padding: 18px 20px;
+  border: 1px solid #e8e0f5;
+}
+
+.desc-text {
+  font-size: 0.95rem;
+  line-height: 1.8;
+  color: #303133;
+  white-space: pre-wrap;
+  margin-bottom: 14px;
+}
+
+.copy-btn {
+  margin-top: 4px;
+}
+
 .market-link-card {
   margin-bottom: 24px;
   padding: 20px 28px;
@@ -1103,6 +1404,20 @@ const formatYear = (val) => {
   .trend-stat-value {
     font-size: 1.15rem;
   }
+  .advice-tiers {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .ai-desc-card {
+    padding: 18px 16px;
+  }
+  .desc-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .style-selector {
+    justify-content: center;
+  }
   .market-link-card {
     padding: 16px 18px;
   }
@@ -1258,6 +1573,35 @@ const formatYear = (val) => {
     height: 1px;
     width: 70%;
     margin: 2px 0;
+  }
+  .listing-advice-card {
+    padding: 16px 12px;
+    border-radius: 12px;
+  }
+  .advice-tiers {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .tier-item {
+    padding: 14px 12px;
+  }
+  .tier-unit {
+    font-size: 1.15rem;
+  }
+  .ai-desc-card {
+    padding: 16px 12px;
+    border-radius: 12px;
+  }
+  .desc-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .style-selector {
+    justify-content: center;
+  }
+  .desc-text {
+    font-size: 0.85rem;
   }
   .market-link-card {
     padding: 14px 12px;
