@@ -1482,4 +1482,4 @@ if __name__ == '__main__':
     db.alter_users_table()  # 一次性迁移：为新版本添加 profile 字段
     db.close()
 
-    app.run(debug=False, host='0.0.0.0', port=5000) 
+    app.run(debug=False, host='0.0.0.0', port=5000)

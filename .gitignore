@@ -53,6 +53,15 @@ Snaprop_Instant/cot_trajectory.json
 *.log
 logs/
 
+# Deploy archives
+*.tar.gz
+*.zip
+*.tar
+
+# Deploy scripts (generated, not source)
+# deploy_frontend.ps1
+# deploy_backend.ps1
+
 # Local environment
 .env
 .env.local
